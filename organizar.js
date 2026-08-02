@@ -223,7 +223,7 @@ function montarOrganizarUI(container, foco) {
         if (p.selecionado) selCount++;
 
         const el = document.createElement('div');
-        el.className = 'org-pagina' + (p.selecionada ? ' selecionada' : '');
+        el.className = 'org-pagina' + (p.selecionado ? ' selecionada' : '');
         el.dataset.id = p.id;
         el.dataset.originalIndex = p.originalIndex;
         el.draggable = true;
