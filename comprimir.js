@@ -144,12 +144,24 @@ PDFTools.registrar({
         await PDFTools.carregarLib('pdf-lib');
         await PDFTools.carregarLib('pdfjs');
         
-        const analise = await analisarPDF(file);
-        arqBuffer = analise.buffer;
+        progresso.mostrar('Analisando documento...');
+        const info = await analisarPDF(fileOrig);
         
-        container.querySelector('#comp-meta-arq').textContent = `${PDFTools.formatarTamanho(file.size)} • ${analise.paginas} páginas`;
+        if (info.totalImagens > 0) {
+          let ignoradas = info.totalImagens - info.imagensTrataveis;
+          let prop = info.bytesTotais > 0 ? Math.round((info.bytesTrataveis / info.bytesTotais) * 100) : 0;
+          let avisoMsg = `Este PDF tem <strong>${info.totalImagens} imagens</strong>: ${info.imagensTrataveis} que consigo recomprimir e <strong>${ignoradas} em formatos que não consigo tratar no navegador</strong> (como Flate/JBIG2 puros). A redução possível fica limitada a cerca de <strong>${prop}%</strong> do tamanho total.`;
+          
+          let painelAviso = document.getElementById('comp-analise-aviso');
+          painelAviso.innerHTML = avisoMsg;
+          painelAviso.style.display = 'block';
+        }
         
-        if (analise.tipo === 'texto') {
+        arqBuffer = info.buffer;
+        
+        container.querySelector('#comp-meta-arq').textContent = `${PDFTools.formatarTamanho(file.size)} • ${info.paginas} páginas`;
+        
+        if (info.tipo === 'texto') {
           avisoBox.innerHTML = `<strong>Atenção:</strong> Esse PDF parece ser de texto puro (não contém imagens escaneadas). A redução possível é pequena (5–15%). O modo de tamanho alvo pode não alcançar resultados muito agressivos.`;
           avisoBox.style.display = 'block';
         } else {
@@ -171,6 +183,8 @@ PDFTools.registrar({
           avisoBox.innerHTML = PDFTools.erro('pdf_corrompido', err.message);
         }
         avisoBox.style.display = 'block';
+      } finally {
+        progresso.esconder();
       }
     }
 
@@ -199,7 +213,6 @@ PDFTools.registrar({
         
         const sizeOrig = fileOrig.size;
         const sizeFinal = result.tamanho;
-        let pReducao = ((sizeOrig - sizeFinal) / sizeOrig) * 100;
         
         container.querySelector('#res-orig').textContent = PDFTools.formatarTamanho(sizeOrig);
         container.querySelector('#res-final').textContent = PDFTools.formatarTamanho(sizeFinal);
@@ -208,22 +221,23 @@ PDFTools.registrar({
         const btnBaixar = container.querySelector('#btn-baixar-comp');
         const msgDiv = container.querySelector('#comp-resultado-msg');
         
-        if (sizeFinal >= sizeOrig) {
-          container.querySelector('#res-reducao').textContent = 'Nenhuma (Arquivo aumentou)';
-          container.querySelector('#res-reducao').style.color = 'var(--cor-erro)';
-          msgDiv.innerHTML = `<strong>A compressão não foi efetiva.</strong> O arquivo original já estava altamente otimizado ou não continha imagens que pudessem ser reduzidas.`;
-          btnManterOrig.style.display = 'block';
-          btnManterOrig.onclick = () => PDFTools.baixar(fileOrig, fileOrig.name);
+        if (result.blob.size >= fileOrig.size) {
+           container.querySelector('#res-reducao').textContent = 'Nenhuma';
+           container.querySelector('#res-reducao').style.color = 'var(--cor-erro)';
+           msgDiv.innerHTML = `<span style="color:var(--cor-erro);">Atenção:</span> O PDF já estava muito comprimido (redução de 0%). O arquivo gerado está sendo entregue igual ou maior que o original.`;
+           btnManterOrig.style.display = 'block';
+           btnManterOrig.onclick = () => PDFTools.baixar(fileOrig, fileOrig.name);
         } else {
-          container.querySelector('#res-reducao').textContent = `-${pReducao.toFixed(1)}%`;
-          container.querySelector('#res-reducao').style.color = 'var(--cor-sucesso)';
-          btnManterOrig.style.display = 'none';
-          
-          if (modo === 'alvo' && sizeFinal > params.alvoBytes) {
-            msgDiv.innerHTML = `Consegui chegar a <strong>${PDFTools.formatarTamanho(sizeFinal)}</strong> em ${result.tentativas} tentativas. Abaixo disso o documento ficaria ilegível.<br><small style="color: var(--texto-2);">Dica: Se precisa reduzir mais, use a ferramenta "Organizar Páginas" para remover páginas ou dividir o arquivo.</small>`;
-          } else {
-            msgDiv.innerHTML = `Compressão finalizada com sucesso após ${result.tentativas} iteração(ões)!`;
-          }
+           const pReducao = Math.round((1 - (result.blob.size / fileOrig.size)) * 100);
+           container.querySelector('#res-reducao').textContent = `-${pReducao}%`;
+           container.querySelector('#res-reducao').style.color = 'var(--cor-sucesso)';
+           btnManterOrig.style.display = 'none';
+           
+           if (pReducao < 5) {
+             msgDiv.innerHTML = `Reduzi apenas <strong>${pReducao}%</strong>. Motivo: ${result.imagensIgnoradas} das ${result.totalImagensOriginal} imagens estão em formato nativo sem suporte a recompressão, ou o PDF é de texto/vetor já otimizado.`;
+           } else {
+             msgDiv.innerHTML = `Compressão finalizada com sucesso após ${result.tentativas} iteração(ões)! Redução de ${pReducao}%.`;
+           }
         }
 
         const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-comprimido.pdf';
@@ -248,10 +262,6 @@ PDFTools.registrar({
         previewDiv.innerHTML = '';
         previewDiv.appendChild(canvas);
 
-        if (result.imagensIgnoradas > 0) {
-           msgDiv.innerHTML += `<br><small style="color:#ffc107;">Aviso: ${result.imagensIgnoradas} imagem(ns) estava(m) num formato nativo que não pôde ser recomprimido no navegador.</small>`;
-        }
-
       } catch (err) {
         console.error(err);
         PDFTools.UI.mostrarToast('Erro ao processar: ' + err.message, 'erro');
@@ -265,26 +275,55 @@ PDFTools.registrar({
 
 // --- LÓGICA PURA ---
 
+function obterFiltrosStr(filter, PDFName, PDFArray) {
+  let list = [];
+  if (!filter) return list;
+  if (filter instanceof PDFName) list.push(filter.decodeText ? filter.decodeText() : (filter.name || ''));
+  else if (filter instanceof PDFArray) {
+    const arr = filter.array || [];
+    for (let i = 0; i < arr.length; i++) {
+      let f = arr[i];
+      if (f instanceof PDFName) list.push(f.decodeText ? f.decodeText() : (f.name || ''));
+    }
+  } else if (Array.isArray(filter)) {
+    for (let i = 0; i < filter.length; i++) {
+      let f = filter[i];
+      list.push(f && f.decodeText ? f.decodeText() : (f.name || f));
+    }
+  }
+  return list;
+}
+
 async function analisarPDF(file) {
   const buffer = await PDFTools.lerComoArrayBuffer(file);
-  const { PDFDocument, PDFName, PDFRawStream } = window.PDFLib;
+  const { PDFDocument, PDFName, PDFRawStream, PDFArray } = window.PDFLib;
   const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
   
   let totalImagens = 0;
-  let imagensJpg = 0;
+  let imagensTrataveis = 0;
+  let bytesTrataveis = 0;
+  let bytesTotais = 0;
 
   doc.context.enumerateIndirectObjects().forEach(([ref, pdfObject]) => {
     if (pdfObject instanceof PDFRawStream) {
       const subtype = pdfObject.dict.lookup(PDFName.of('Subtype'));
       if (subtype === PDFName.of('Image')) {
         totalImagens++;
-        const filter = pdfObject.dict.lookup(PDFName.of('Filter'));
-        let isJpg = false;
-        if (filter === PDFName.of('DCTDecode')) isJpg = true;
-        else if (filter && filter.name === 'DCTDecode') isJpg = true;
-        else if (Array.isArray(filter) && filter.length > 0 && filter[0].name === 'DCTDecode') isJpg = true;
+        const size = pdfObject.contents ? pdfObject.contents.length : 0;
+        bytesTotais += size;
         
-        if (isJpg) imagensJpg++;
+        const filter = pdfObject.dict.lookup(PDFName.of('Filter'));
+        const filtrosStr = obterFiltrosStr(filter, PDFName, PDFArray);
+        
+        let isCompressivel = false;
+        if (filtrosStr.includes('DCTDecode')) {
+          isCompressivel = true;
+        }
+        
+        if (isCompressivel) {
+          imagensTrataveis++;
+          bytesTrataveis += size;
+        }
       }
     }
   });
@@ -292,17 +331,18 @@ async function analisarPDF(file) {
   const numPages = doc.getPageCount();
   const tipo = (totalImagens === 0) ? 'texto' : (totalImagens < numPages ? 'misto' : 'escaneado');
 
-  return { tipo, paginas: numPages, totalImagens, imagensJpg, buffer };
+  return { tipo, paginas: numPages, totalImagens, imagensTrataveis, bytesTotais, bytesTrataveis, buffer };
 }
 
 async function comprimirLogica(bufferOriginal, params, aoProgredir) {
-  const { PDFDocument, PDFName, PDFRawStream } = window.PDFLib;
+  const { PDFDocument, PDFName, PDFRawStream, PDFNumber, PDFArray } = window.PDFLib;
   const { alvoBytes, qualidadeFixa } = params;
   
   let melhorBlob = null;
   let melhorTamanho = Infinity;
   let tentativas = 0;
   let imgIgnoradasStats = 0;
+  let imgTotal = 0;
 
   let qMin = 0.15; // Não descer abaixo de 15% senão vira borrão irrecuperável
   let qMax = 0.85; 
@@ -324,7 +364,8 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
     doc.setTitle(''); doc.setAuthor(''); doc.setSubject(''); doc.setKeywords([]); doc.setProducer(''); doc.setCreator('');
 
     const refs = doc.context.enumerateIndirectObjects();
-    let imgTotal = 0, imgProc = 0;
+    let imgProc = 0;
+    imgTotal = 0;
 
     for (let i = 0; i < refs.length; i++) {
       const [ref, pdfObject] = refs[i];
@@ -333,20 +374,33 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
         if (subtype === PDFName.of('Image')) {
            imgTotal++;
            const filter = pdfObject.dict.lookup(PDFName.of('Filter'));
-           let isJpg = false;
-           if (filter === PDFName.of('DCTDecode') || (filter && filter.name === 'DCTDecode') || (Array.isArray(filter) && filter.length > 0 && filter[0].name === 'DCTDecode')) {
-             isJpg = true;
-           }
+           const filtrosStr = obterFiltrosStr(filter, PDFName, PDFArray);
            
-           if (isJpg) {
+           if (filtrosStr.includes('DCTDecode')) {
              try {
-               const imgBytes = pdfObject.contents;
+               let imgBytes = pdfObject.contents;
+               
+               // Se tem FlateDecode antes do DCTDecode, descomprime a camada Flate
+               if (filtrosStr[0] === 'FlateDecode' && window.DecompressionStream) {
+                 const ds = new DecompressionStream('deflate');
+                 const writer = ds.writable.getWriter();
+                 writer.write(imgBytes);
+                 writer.close();
+                 const res = new Response(ds.readable);
+                 imgBytes = new Uint8Array(await res.arrayBuffer());
+               }
+
                const novoJpgBytes = await recomprimirJpeg(imgBytes, q);
-               const newImage = await doc.embedJpg(novoJpgBytes);
-               doc.context.assign(ref, doc.context.lookup(newImage.ref));
+               
+               // Modifica o stream diretamente em vez de vazar com embedJpg (Resolve A.2)
+               pdfObject.contents = novoJpgBytes;
+               pdfObject.dict.set(PDFName.of('Length'), PDFNumber.of(novoJpgBytes.length));
+               pdfObject.dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+               pdfObject.dict.delete(PDFName.of('DecodeParms'));
+               
                imgProc++;
              } catch(e) {
-               // Falha ao ler a imagem (pode estar com headers corrompidos, ignora)
+               // Falha ao ler a imagem ou descompressão
              }
            }
         }
@@ -388,7 +442,7 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
   }
 
   // Se mesmo reduzindo tudo nunca bateu a meta, entrega o melhor (que será a última iteração onde qMin era quase qMax)
-  return { blob: melhorBlob, tentativas, tamanho: melhorTamanho, imagensIgnoradas: imgIgnoradasStats };
+  return { blob: melhorBlob, tentativas, tamanho: melhorTamanho, imagensIgnoradas: imgIgnoradasStats, totalImagensOriginal: imgTotal };
 }
 
 async function recomprimirJpeg(imgBytes, qualidade) {
