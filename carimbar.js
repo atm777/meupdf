@@ -80,10 +80,32 @@ function montarCarimboUI(container, modoFixo) {
             </div>
 
             <div id="aba-marca" style="display:none;">
-              <div class="cr-campo">
-                <label>Texto da Marca (Acentos suportados)</label>
-                <input type="text" id="mc-texto" class="cr-input" value="CÓPIA NÃO AUTORIZADA">
+              <div class="cr-aba-nav" style="margin-bottom:12px; border-bottom: 2px solid var(--borda);">
+                <div class="cr-aba ativa" id="aba-marca-texto" style="flex:1; text-align:center;">Texto</div>
+                <div class="cr-aba" id="aba-marca-img" style="flex:1; text-align:center;">Imagem</div>
               </div>
+              
+              <div id="mc-container-texto">
+                <div class="cr-campo">
+                  <label>Texto da Marca (Acentos suportados)</label>
+                  <input type="text" id="mc-texto" class="cr-input" value="CÓPIA NÃO AUTORIZADA">
+                </div>
+                <div class="cr-campo">
+                  <label>Cor</label>
+                  <input type="color" id="mc-cor" class="cr-input" value="#ff0000" style="padding:4px;">
+                </div>
+              </div>
+
+              <div id="mc-container-img" style="display:none;">
+                <div class="cr-campo">
+                  <label>Arquivo da Imagem (PNG/JPG)</label>
+                  <input type="file" id="mc-img-file" class="cr-input" accept="image/png, image/jpeg">
+                </div>
+                <div class="cr-aviso-marca" id="mc-aviso-jpg" style="display:none; margin-top:0; margin-bottom:12px;">
+                  JPGs ou PNGs sem transparência terão opacidade aplicada ao fundo inteiro.
+                </div>
+              </div>
+
               <div class="cr-campo">
                 <label>Posição</label>
                 <select id="mc-posicao" class="cr-input">
@@ -92,12 +114,12 @@ function montarCarimboUI(container, modoFixo) {
                 </select>
               </div>
               <div style="display:flex; gap:8px;">
-                <div class="cr-campo" style="flex:1;"><label>Tamanho</label><input type="number" id="mc-tamanho" class="cr-input" value="60"></div>
+                <div class="cr-campo" style="flex:1;"><label id="lbl-mc-tamanho">Tamanho (px)</label><input type="number" id="mc-tamanho" class="cr-input" value="60"></div>
                 <div class="cr-campo" style="flex:1;"><label>Rotação (graus)</label><input type="number" id="mc-rotacao" class="cr-input" value="45"></div>
               </div>
-              <div style="display:flex; gap:8px;">
-                <div class="cr-campo" style="flex:1;"><label>Cor</label><input type="color" id="mc-cor" class="cr-input" value="#ff0000" style="padding:4px;"></div>
-                <div class="cr-campo" style="flex:1;"><label>Opacidade (%)</label><input type="number" id="mc-opacidade" class="cr-input" value="20" min="5" max="100"></div>
+              <div class="cr-campo">
+                <label>Opacidade (%)</label>
+                <input type="number" id="mc-opacidade" class="cr-input" value="20" min="5" max="100">
               </div>
               
               <div class="cr-aviso-marca">
@@ -121,6 +143,79 @@ function montarCarimboUI(container, modoFixo) {
     const modoAtual = modoFixo; // 'num' ou 'marca' — fixo, cada botão da tela inicial abre só um modo
     container.querySelector('#aba-num').style.display = modoAtual === 'num' ? 'block' : 'none';
     container.querySelector('#aba-marca').style.display = modoAtual === 'marca' ? 'block' : 'none';
+
+    let tipoMarcaAtual = 'texto';
+    let imgCarimboBuffer = null;
+    let imgCarimboTipo = null;
+    let imgCarimboOriginalRatio = 1;
+
+    const btnAbaTexto = container.querySelector('#aba-marca-texto');
+    const btnAbaImg = container.querySelector('#aba-marca-img');
+    const containerTexto = container.querySelector('#mc-container-texto');
+    const containerImg = container.querySelector('#mc-container-img');
+    const lblTamanho = container.querySelector('#lbl-mc-tamanho');
+    const inputTamanho = container.querySelector('#mc-tamanho');
+
+    if (btnAbaTexto) {
+      btnAbaTexto.onclick = () => {
+        tipoMarcaAtual = 'texto';
+        btnAbaTexto.classList.add('ativa');
+        btnAbaImg.classList.remove('ativa');
+        containerTexto.style.display = 'block';
+        containerImg.style.display = 'none';
+        lblTamanho.textContent = 'Tamanho (px)';
+        inputTamanho.value = 60;
+        gerarPreview();
+      };
+      btnAbaImg.onclick = () => {
+        tipoMarcaAtual = 'imagem';
+        btnAbaImg.classList.add('ativa');
+        btnAbaTexto.classList.remove('ativa');
+        containerImg.style.display = 'block';
+        containerTexto.style.display = 'none';
+        lblTamanho.textContent = 'Tamanho (% da pág)';
+        inputTamanho.value = 50;
+        gerarPreview();
+      };
+    }
+
+    const inputImg = container.querySelector('#mc-img-file');
+    if (inputImg) {
+      inputImg.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.type.match('image/jpeg|image/png')) {
+          PDFTools.UI.mostrarToast('Selecione um JPG ou PNG válido.', 'erro');
+          return;
+        }
+        
+        container.querySelector('#mc-aviso-jpg').style.display = file.type === 'image/jpeg' ? 'block' : 'none';
+        
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+        URL.revokeObjectURL(url);
+        
+        imgCarimboOriginalRatio = img.height / img.width;
+        imgCarimboTipo = file.type;
+
+        const maxPx = 3000;
+        if (img.width > maxPx || img.height > maxPx) {
+          const prop = Math.min(maxPx / img.width, maxPx / img.height);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * prop);
+          canvas.height = Math.round(img.height * prop);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise(r => canvas.toBlob(r, file.type, 0.9));
+          imgCarimboBuffer = await blob.arrayBuffer();
+        } else {
+          imgCarimboBuffer = await file.arrayBuffer();
+        }
+        
+        gerarPreview();
+      };
+    }
 
     async function abrirArquivo(file) {
       fileOrig = file;
@@ -157,9 +252,13 @@ function montarCarimboUI(container, modoFixo) {
       } else {
         return {
           modo: 'marca',
+          tipoMarca: tipoMarcaAtual,
+          imgBuffer: imgCarimboBuffer,
+          imgTipo: imgCarimboTipo,
+          imgRatio: imgCarimboOriginalRatio,
           texto: container.querySelector('#mc-texto').value,
           posicao: container.querySelector('#mc-posicao').value,
-          tamanho: parseInt(container.querySelector('#mc-tamanho').value) || 60,
+          tamanho: parseInt(container.querySelector('#mc-tamanho').value) || (tipoMarcaAtual === 'imagem' ? 50 : 60),
           rotacao: parseInt(container.querySelector('#mc-rotacao').value) || 0,
           cor: hexToRgb(container.querySelector('#mc-cor').value),
           opacidade: (parseInt(container.querySelector('#mc-opacidade').value) || 20) / 100
@@ -259,6 +358,15 @@ function hexToRgb(hex) {
 async function aplicarCarimbo(pdfDoc, indicesPags, conf, totalPagsOriginal) {
   const { rgb, degrees, StandardFonts } = window.PDFLib;
 
+  let pdfImage = null;
+  if (conf.modo === 'marca' && conf.tipoMarca === 'imagem' && conf.imgBuffer) {
+    if (conf.imgTipo === 'image/png') {
+      pdfImage = await pdfDoc.embedPng(conf.imgBuffer);
+    } else {
+      pdfImage = await pdfDoc.embedJpg(conf.imgBuffer);
+    }
+  }
+
   // Fonte WinAnsi cobre português (ç, ã, é) nativamente no PDF
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
@@ -303,44 +411,55 @@ async function aplicarCarimbo(pdfDoc, indicesPags, conf, totalPagsOriginal) {
       });
 
     } else { // Marca d'água
-      const txt = conf.texto;
-      const txtW = font.widthOfTextAtSize(txt, conf.tamanho);
-      const txtH = font.heightAtSize(conf.tamanho);
+      const isTexto = conf.tipoMarca === 'texto';
+      let objW = 0, objH = 0;
+      
+      if (isTexto) {
+        objW = font.widthOfTextAtSize(conf.texto, conf.tamanho);
+        objH = font.heightAtSize(conf.tamanho);
+      } else {
+        if (!pdfImage) continue;
+        objW = visW * (conf.tamanho / 100);
+        objH = objW * conf.imgRatio;
+      }
 
-      const opcoesBase = {
-        size: conf.tamanho,
-        font,
-        color: rgb(conf.cor.r, conf.cor.g, conf.cor.b),
-        opacity: conf.opacidade
-      };
-
-      // Rotação total no espaço bruto = rotação decorativa do usuário + compensação de /Rotate da página.
       const rotTotal = conf.rotacao + R;
 
       if (conf.posicao === 'centro') {
-        // Ancora tal que, após rotacionar por rotTotal ao redor da âncora, o CENTRO do texto
-        // caia exatamente no centro bruto da página (que corresponde ao centro visual,
-        // pois o centro de um retângulo é invariável sob rotação ao redor de si mesmo).
         const rad = (rotTotal * Math.PI) / 180;
-        const xOffset = (txtW/2)*Math.cos(rad) - (txtH/2)*Math.sin(rad);
-        const yOffset = (txtW/2)*Math.sin(rad) + (txtH/2)*Math.cos(rad);
+        const xOffset = (objW/2)*Math.cos(rad) - (objH/2)*Math.sin(rad);
+        const yOffset = (objW/2)*Math.sin(rad) + (objH/2)*Math.cos(rad);
 
-        page.drawText(txt, {
-          ...opcoesBase,
-          x: (rawW/2) - xOffset,
-          y: (rawH/2) - yOffset,
-          rotate: degrees(rotTotal)
-        });
+        const finalX = (rawW/2) - xOffset;
+        const finalY = (rawH/2) - yOffset;
+        
+        if (isTexto) {
+          page.drawText(conf.texto, {
+            size: conf.tamanho, font, color: rgb(conf.cor.r, conf.cor.g, conf.cor.b), opacity: conf.opacidade,
+            x: finalX, y: finalY, rotate: degrees(rotTotal)
+          });
+        } else {
+          page.drawImage(pdfImage, {
+            x: finalX, y: finalY, width: objW, height: objH, opacity: conf.opacidade, rotate: degrees(rotTotal)
+          });
+        }
       } else {
-        // Repetida (Tiled): gera a grade em coordenadas VISUAIS e converte cada ponto
-        // individualmente para o espaço bruto, já compensando /Rotate.
-        const stepX = txtW + 50;
-        const stepY = txtH + 100;
+        const stepX = objW + 50;
+        const stepY = objH + 100;
         const diag = Math.sqrt(visW*visW + visH*visH);
         for(let py = -diag; py < diag*1.5; py += stepY) {
           for(let px = -diag; px < diag*1.5; px += stepX) {
             const t = PDFTools.posicaoRotacionada(px, py, 0, 0, rawW, rawH, R);
-            page.drawText(txt, { ...opcoesBase, x: t.x, y: t.y, rotate: degrees(rotTotal) });
+            if (isTexto) {
+              page.drawText(conf.texto, { 
+                size: conf.tamanho, font, color: rgb(conf.cor.r, conf.cor.g, conf.cor.b), opacity: conf.opacidade,
+                x: t.x, y: t.y, rotate: degrees(rotTotal) 
+              });
+            } else {
+              page.drawImage(pdfImage, {
+                x: t.x, y: t.y, width: objW, height: objH, opacity: conf.opacidade, rotate: degrees(rotTotal)
+              });
+            }
           }
         }
       }

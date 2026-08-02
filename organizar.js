@@ -672,71 +672,64 @@ async function aplicarEdicoes(fileOrig, planoFinal, acao, param, aoProgredir) {
   aoProgredir(5, "Carregando documento original...");
   await new Promise(r => setTimeout(r, 0));
 
+  // Copia um lote de páginas em UMA ÚNICA chamada a copyPages(). O pdf-lib cria um
+  // PDFObjectCopier novo (com cache de objetos já copiados vazio) a cada chamada de
+  // copyPages — então copiar página por página faz cada página reembutir do zero
+  // qualquer recurso compartilhado com as demais (fontes, a logo do cabeçalho etc.),
+  // em vez de reaproveitar a cópia já feita. Copiar o lote inteiro de uma vez evita isso.
+  async function copiarLote(indicesOriginais, paginasData) {
+    const docParte = await PDFDocument.create();
+    const paginasCopiadas = await docParte.copyPages(docOriginal, indicesOriginais);
+    paginasCopiadas.forEach((page, i) => {
+      aplicarTransformacoes(page, paginasData[i], degrees);
+      docParte.addPage(page);
+    });
+    return docParte;
+  }
+
   if (acao === 'dividir-tamanho') {
     let maxBytes = param * 1024 * 1024;
-    
-    aoProgredir(10, "Sondando peso base do PDF...");
-    let docVazio = await PDFDocument.create();
-    let pisoBytes = (await docVazio.save()).length;
-    
-    let docPrimeira = await PDFDocument.create();
-    const [p0] = await docPrimeira.copyPages(docOriginal, [planoFinal[0].originalIndex]);
-    aplicarTransformacoes(p0, planoFinal[0], degrees);
-    docPrimeira.addPage(p0);
-    let custoPrimeira = (await docPrimeira.save()).length - pisoBytes;
-    
-    let custoPorPagina = Math.max(1024, custoPrimeira); // Nunca menor que 1KB
-    
-    let docAtual = await PDFDocument.create();
-    let estimativaAtual = pisoBytes;
+    let startIdx = 0;
 
-    for (let i = 0; i < numTotal; i++) {
-      aoProgredir(20 + (i/numTotal)*70, `Processando página ${i+1} de ${numTotal}...`);
+    while (startIdx < numTotal) {
+      aoProgredir(10 + (startIdx/numTotal)*80, `Montando parte a partir da página ${startIdx+1} de ${numTotal}...`);
       await new Promise(r => setTimeout(r, 0));
 
-      // Se a estimativa passar do limite E já houver pelo menos uma página neste documento, finaliza-o
-      if (estimativaAtual + custoPorPagina > maxBytes && docAtual.getPageCount() > 0) {
-        partes.push(new Blob([await docAtual.save()], { type: 'application/pdf' }));
-        docAtual = await PDFDocument.create();
-        estimativaAtual = pisoBytes;
+      // Busca binária pelo maior número de páginas (a partir de startIdx) que cabe em maxBytes.
+      // Cada tentativa copia o lote candidato inteiro em uma só chamada (copiarLote), então
+      // nunca duplica fontes/imagens compartilhadas entre as páginas do próprio lote.
+      let lo = 1, hi = numTotal - startIdx;
+      let melhorBytes = null, melhorCount = 1;
+
+      while (lo <= hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        const fatia = planoFinal.slice(startIdx, startIdx + mid);
+        const docTeste = await copiarLote(fatia.map(p => p.originalIndex), fatia);
+        const bytes = await docTeste.save();
+
+        if (bytes.length <= maxBytes || mid === 1) {
+          melhorBytes = bytes;
+          melhorCount = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
       }
 
-      const pData = planoFinal[i];
-      const [copiedPage] = await docAtual.copyPages(docOriginal, [pData.originalIndex]);
-      aplicarTransformacoes(copiedPage, pData, degrees);
-      docAtual.addPage(copiedPage);
-      
-      estimativaAtual += custoPorPagina;
-
-      // Recalibra apenas no primeiro save para não fazer save() em toda página
-      if (docAtual.getPageCount() === 1) {
-         let tamanhoRealAtual = (await docAtual.save()).length;
-         estimativaAtual = tamanhoRealAtual;
-         custoPorPagina = Math.max(1024, tamanhoRealAtual - pisoBytes);
-      }
-    }
-    
-    if (docAtual.getPageCount() > 0) {
-       partes.push(new Blob([await docAtual.save()], { type: 'application/pdf' }));
+      partes.push(new Blob([melhorBytes], { type: 'application/pdf' }));
+      startIdx += melhorCount;
     }
 
   } else if (acao === 'dividir-n') {
     const quebra = Math.max(1, param || 1);
-    let docAtual = await PDFDocument.create();
 
-    for (let i = 0; i < numTotal; i++) {
-      aoProgredir(10 + (i/numTotal)*80, `Processando página ${i+1} de ${numTotal}...`);
+    for (let startIdx = 0; startIdx < numTotal; startIdx += quebra) {
+      aoProgredir(10 + (startIdx/numTotal)*80, `Montando parte a partir da página ${startIdx+1} de ${numTotal}...`);
       await new Promise(r => setTimeout(r, 0));
 
-      const pData = planoFinal[i];
-      const [copiedPage] = await docAtual.copyPages(docOriginal, [pData.originalIndex]);
-      aplicarTransformacoes(copiedPage, pData, degrees);
-      docAtual.addPage(copiedPage);
-
-      if ((i + 1) % quebra === 0 || i === numTotal - 1) {
-        partes.push(new Blob([await docAtual.save()], { type: 'application/pdf' }));
-        docAtual = await PDFDocument.create();
-      }
+      const fatia = planoFinal.slice(startIdx, startIdx + quebra);
+      const docParte = await copiarLote(fatia.map(p => p.originalIndex), fatia);
+      partes.push(new Blob([await docParte.save()], { type: 'application/pdf' }));
     }
 
   } else {
