@@ -144,7 +144,7 @@ PDFTools.registrar({
         await PDFTools.carregarLib('pdf-lib');
         await PDFTools.carregarLib('pdfjs');
         
-        progresso.mostrar('Analisando documento...');
+        progresso.atualizar(10, 'Analisando documento...');
         const info = await analisarPDF(fileOrig);
         
         if (info.totalImagens > 0) {
