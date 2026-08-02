@@ -20,7 +20,7 @@ function montarOrganizarUI(container, foco) {
         .org-painel { background: var(--sup-2); border: 1px solid var(--borda); border-radius: 8px; padding: 16px; }
         .org-grade-paginas { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px; overflow-y: auto; max-height: 600px; padding: 8px; background: var(--sup-2); border-radius: 8px; }
         .org-pagina { background: var(--sup); box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 4px; display: flex; flex-direction: column; position: relative; cursor: pointer; user-select: none; transition: transform 0.2s; }
-        .org-pagina.selecionada { outline: 3px solid var(--cor-primaria); outline-offset: 2px; }
+        .org-pagina.selecionada { box-shadow: 0 0 0 3px var(--cor-primaria) !important; }
         .org-pagina-header { font-size: 11px; padding: 4px; text-align: center; font-weight: bold; background: var(--sup-2); border-bottom: 1px solid var(--borda); color: var(--texto-2); display: flex; justify-content: space-between; }
         .org-pagina-thumb-container { width: 100%; height: 160px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; background: var(--sup-2); }
         .org-pagina-thumb-container canvas { max-width: 100%; max-height: 100%; object-fit: contain; transition: transform 0.3s ease; }

@@ -129,7 +129,7 @@ function montarCarimboUI(container, modoFixo) {
         await PDFTools.carregarLib('pdf-lib');
         await PDFTools.carregarLib('pdfjs');
         arqBuffer = await PDFTools.lerComoArrayBuffer(file);
-        pdfDocJs = await window.pdfjsLib.getDocument({ data: arqBuffer }).promise;
+        pdfDocJs = await window.pdfjsLib.getDocument({ data: arqBuffer.slice(0) }).promise;
         
         container.querySelector('#cr-tela-inicial').style.display = 'none';
         container.querySelector('#cr-tela-trabalho').style.display = 'flex';
@@ -183,7 +183,7 @@ function montarCarimboUI(container, modoFixo) {
         await aplicarCarimbo(docTemp, [idxPag], conf, numTotal);
         
         const tempBytes = await docTemp.save();
-        const tempDocJs = await window.pdfjsLib.getDocument({ data: tempBytes }).promise;
+        const tempDocJs = await window.pdfjsLib.getDocument({ data: tempBytes.slice(0) }).promise;
         const page = await tempDocJs.getPage(idxPag + 1);
         
         const viewport = page.getViewport({ scale: 1.0 });
