@@ -4,8 +4,8 @@ window.PDFTools = (function() {
   const ferramentasRegistradas = {};
 
   const configLibs = {
-    'pdf-lib': 'lib/pdf-lib.min.js',
-    'pdfjs': 'lib/pdf.min.js'
+    'pdf-lib': 'https://cdn.jsdelivr.net/gh/atm777/meus-scripts@main/pdf-lib.min.js',
+    'pdfjs': 'https://cdn.jsdelivr.net/gh/atm777/meus-scripts@main/pdf.min.js'
   };
 
   const erros = {
