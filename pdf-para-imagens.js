@@ -41,6 +41,7 @@ PDFTools.registrar({
         .im-btn-acao:hover { background: #004494; }
         .im-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
         .im-btn-link { background: none; border: none; color: var(--cor-primaria); cursor: pointer; font-size: 13px; text-decoration: underline; padding: 0; margin-bottom: 12px; }
+        .im-btn-link-sm { background: none; border: none; color: var(--cor-primaria); cursor: pointer; font-size: 12px; text-decoration: underline; padding: 0; margin-left: 6px; }
       `;
       document.head.appendChild(style);
     }
@@ -94,9 +95,25 @@ PDFTools.registrar({
               </label>
               <div style="font-size:11px; color: var(--texto-2); font-weight:normal;">Junta as páginas verticalmente (ótimo para chat/rede social).</div>
             </div>
+            
             <div id="im-alerta-canvas" class="im-alerta">
               ⚠️ <strong>Muitas páginas em alta resolução.</strong><br>
               O navegador travará ao gerar uma imagem tão gigante de uma vez. O arquivo será dividido em blocos de segurança automaticamente.
+            </div>
+            
+            <div id="im-alerta-memoria" class="im-alerta" style="margin-top:16px; margin-bottom: 8px;"></div>
+
+            <div id="box-saida-multipla" style="display:none; background: var(--sup); padding:12px; border-radius:4px; margin-top:16px; margin-bottom:8px; border: 1px solid var(--borda);">
+              <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">Isso vai gerar <span id="im-qtd-arquivos">0</span> arquivos.</div>
+              <label style="display:block; font-size:13px; margin-bottom:6px;">
+                <input type="radio" name="im_saida" id="im_saida_zip" value="zip" checked> Baixar em um .zip (recomendado)
+              </label>
+              <label style="display:block; font-size:13px;">
+                <input type="radio" name="im_saida" id="im_saida_sep" value="separados"> Baixar separados
+              </label>
+              <div id="im-aviso-separados" style="font-size:11px; color: #d32f2f; margin-top:6px; display:none;">
+                O navegador vai pedir permissão e pode bloquear os últimos arquivos.
+              </div>
             </div>
 
             <hr style="border:0; border-top: 1px solid var(--borda); margin:16px 0;">
@@ -197,15 +214,39 @@ PDFTools.registrar({
 
     container.querySelector('#im-formato').onchange = (e) => {
       container.querySelector('#box-qualidade').style.display = e.target.value === 'image/png' ? 'none' : 'block';
+      atualizarEstimativa();
     };
 
     container.querySelector('#im-dpi').onchange = atualizarEstimativa;
     container.querySelector('#im-modo-unica').onchange = atualizarEstimativa;
+    
+    const radioZip = container.querySelector('#im_saida_zip');
+    const radioSep = container.querySelector('#im_saida_sep');
+    const avisoSep = container.querySelector('#im-aviso-separados');
+    
+    function aoMudarSaida() {
+      avisoSep.style.display = (radioSep.checked && pagsSelecionadas.size >= 6 && !container.querySelector('#im-modo-unica').checked) ? 'block' : 'none';
+    }
+    radioZip.onchange = aoMudarSaida;
+    radioSep.onchange = aoMudarSaida;
+
+    window.selecionarLotePgs = function(inicio, fim) {
+      pagsSelecionadas.clear();
+      container.querySelectorAll('.im-pagina').forEach(el => el.classList.remove('sel'));
+      for(let i=inicio-1; i<fim && i<numPages; i++) {
+        pagsSelecionadas.add(i);
+        const el = container.querySelector(`.im-pagina[data-index="${i}"]`);
+        if(el) el.classList.add('sel');
+      }
+      atualizarEstimativa();
+    };
 
     function atualizarEstimativa() {
       if(pagsSelecionadas.size === 0) {
         container.querySelector('#im-estimativa').textContent = 'Nenhuma página selecionada.';
         container.querySelector('#im-alerta-canvas').style.display = 'none';
+        container.querySelector('#im-alerta-memoria').style.display = 'none';
+        container.querySelector('#box-saida-multipla').style.display = 'none';
         return;
       }
       
@@ -215,14 +256,54 @@ PDFTools.registrar({
       const exW = Math.round(dimsBase[fst].w * scale);
       const exH = Math.round(dimsBase[fst].h * scale);
       
-      container.querySelector('#im-estimativa').textContent = `${dpi} DPI ≈ ${exW} × ${exH} px (Pág 1)`;
+      const formato = container.querySelector('#im-formato').value;
+      const fator = formato === 'image/jpeg' ? 0.15 : (formato === 'image/webp' ? 0.1 : 0.4);
+      const totalBytes = exW * exH * 4 * pagsSelecionadas.size * fator;
+      const totalMb = (totalBytes / (1024*1024)).toFixed(1);
+      
+      container.querySelector('#im-estimativa').textContent = `${dpi} DPI ≈ ${exW} × ${exH} px (${totalMb} MB total)`;
       
       const modoLonga = container.querySelector('#im-modo-unica').checked;
+      
+      let avisoHTML = '';
+      let travar = false;
+      if (pagsSelecionadas.size > 50) {
+         avisoHTML += `<div style="margin-bottom:8px;">Este PDF tem <strong>${numPages}</strong> páginas. Em <strong>${dpi} DPI</strong> o resultado terá cerca de <strong>${totalMb} MB</strong> no total. A renderização é feita pelo seu navegador e pode levar alguns minutos.</div>`;
+      }
+      if (pagsSelecionadas.size > 300) {
+         avisoHTML += `<div>Documentos deste tamanho podem consumir muita memória, principalmente em celular. Considere converter um intervalo de páginas por vez. <button class="im-btn-link-sm" onclick="selecionarLotePgs(1, 100)">Selecionar 1-100</button></div>`;
+      }
+      if (totalBytes > 500 * 1024 * 1024) { 
+         avisoHTML = `⚠️ <strong>Risco de travamento!</strong> A exportação de ${pagsSelecionadas.size} páginas consumirá mais de 500MB de memória e fechará a aba do navegador. <br><br><button class="im-btn-link-sm" onclick="selecionarLotePgs(1, 100)">Selecione apenas as primeiras 100 páginas para prosseguir</button>`;
+         travar = true;
+      }
+      
+      const elAvisoMem = container.querySelector('#im-alerta-memoria');
+      if (avisoHTML && !modoLonga) {
+        elAvisoMem.innerHTML = avisoHTML;
+        elAvisoMem.style.display = 'block';
+      } else {
+        elAvisoMem.style.display = 'none';
+      }
+      
+      container.querySelector('#btn-gerar').disabled = travar;
+      
+      if (!modoLonga && pagsSelecionadas.size > 1) {
+         container.querySelector('#box-saida-multipla').style.display = 'block';
+         container.querySelector('#im-qtd-arquivos').textContent = pagsSelecionadas.size;
+         if (pagsSelecionadas.size >= 6) {
+            radioZip.checked = true;
+         } else {
+            radioSep.checked = true;
+         }
+         aoMudarSaida();
+      } else {
+         container.querySelector('#box-saida-multipla').style.display = 'none';
+      }
+
       if (modoLonga) {
         let totalH = 0;
         Array.from(pagsSelecionadas).forEach(i => totalH += Math.round(dimsBase[i].h * scale));
-        // Navegadores mobile costumam travar com canvas de altura > 16384, computadores aguentam mais,
-        // mas 15000 é um limite seguro para evitar WebGL crash.
         if (totalH > 15000) container.querySelector('#im-alerta-canvas').style.display = 'block';
         else container.querySelector('#im-alerta-canvas').style.display = 'none';
       } else {
@@ -248,10 +329,13 @@ PDFTools.registrar({
       
       try {
         if (!modoLonga) {
-          // Exportação Individual
+          // Exportação Individual ou ZIP
+          const querZip = radioZip.checked && pagsSelecionadas.size > 1;
+          const blobsArr = [];
+
           for(let k=0; k<pIdx.length; k++) {
             const i = pIdx[k];
-            progresso.atualizar((k/pIdx.length)*100, `Gerando ${k+1} de ${pIdx.length}...`);
+            progresso.atualizar((k/pIdx.length)*100, querZip ? `Renderizando página ${i+1} de ${pIdx.length}...` : `Baixando ${k+1} de ${pIdx.length}...`);
             await new Promise(r => setTimeout(r, 50)); // respiro pro navegador
             
             const page = await pdfDocJs.getPage(i + 1);
@@ -266,10 +350,21 @@ PDFTools.registrar({
             await page.render({ canvasContext: ctx, viewport: vp }).promise;
             
             const blob = await new Promise(r => cvs.toBlob(b => r(b), formato, qual));
-            const pagFormatada = String(i+1).padStart(numPages.toString().length > 1 ? 2 : 1, '0');
-            PDFTools.baixar(blob, `${nomeArq}-pagina-${pagFormatada}.${ext}`);
-            
             cvs.width = 0; cvs.height = 0; // libera memória urgente!
+            
+            const pagFormatada = String(i+1).padStart(numPages.toString().length > 1 ? 2 : 1, '0');
+            const nm = `${nomeArq}-pagina-${pagFormatada}.${ext}`;
+            
+            if (querZip) {
+              blobsArr.push({ nome: nm, blob: blob });
+            } else {
+              PDFTools.baixar(blob, nm);
+            }
+          }
+          
+          if (querZip) {
+            const zipBlob = await PDFTools.gerarZip(blobsArr, (pct, txt) => progresso.atualizar(pct, txt));
+            PDFTools.baixar(zipBlob, `${nomeArq}-paginas.zip`);
           }
         } else {
           // Imagem Única Longa (com split de segurança)

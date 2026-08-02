@@ -224,7 +224,8 @@ PDFTools.registrar({
            div.querySelector('#btn-remover-anot').onclick = async () => {
               try {
                 for(let i=0; i<numP; i++) {
-                   const page = pdfDocLib.getPage(i);
+                   if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+                    const page = pdfDocLib.getPage(i);
                    if(page.node) page.node.delete(window.PDFLib.PDFName.of('Annots'));
                 }
                 const bytes = await pdfDocLib.save();

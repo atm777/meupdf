@@ -85,6 +85,30 @@ function montarOrganizarUI(container, foco) {
       </div>
     ` : '';
 
+    const checkUmPorPagHTML = foco.mostrarCheckUmPorPagina ? `
+      <div class="org-grupo-opcoes" style="margin-top:12px;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:normal; font-size: 13px;">
+          <input type="checkbox" id="check-um-por-pagina">
+          Gerar um arquivo por página
+        </label>
+      </div>
+    ` : '';
+
+    const boxZipHTML = `
+      <div id="org-box-zip" style="display:none; background: var(--sup); padding:12px; border-radius:4px; margin-bottom:16px; border: 1px solid var(--borda);">
+        <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">Isso vai gerar <span id="org-qtd-arquivos">0</span> arquivos.</div>
+        <label style="display:block; font-size:13px; margin-bottom:6px;">
+          <input type="radio" name="org_saida" id="org_saida_zip" value="zip" checked> Baixar em um .zip (recomendado)
+        </label>
+        <label style="display:block; font-size:13px;">
+          <input type="radio" name="org_saida" id="org_saida_sep" value="separados"> Baixar separados
+        </label>
+        <div id="org-aviso-separados" style="font-size:11px; color: #d32f2f; margin-top:6px; display:none;">
+          O navegador vai pedir permissão e pode bloquear os últimos arquivos.
+        </div>
+      </div>
+    `;
+
     container.innerHTML = `
       <div id="org-tela-inicial"></div>
       <div id="org-tela-trabalho" style="display:none;" class="org-grid-layout">
@@ -97,6 +121,8 @@ function montarOrganizarUI(container, foco) {
           <div class="org-painel">
             <h3 style="margin-top:0; margin-bottom:16px; font-size:16px;">Exportar</h3>
             ${paramBlocoHTML}
+            ${checkUmPorPagHTML}
+            ${boxZipHTML}
             <button class="org-btn-acao" id="btn-gerar" style="width:100%;">${foco.labelBotao}</button>
             <div id="org-progresso-container" style="margin-top:16px;"></div>
           </div>
@@ -197,7 +223,7 @@ function montarOrganizarUI(container, foco) {
         if (p.selecionado) selCount++;
 
         const el = document.createElement('div');
-        el.className = 'org-pagina' + (p.selecionado ? ' selecionada' : '');
+        el.className = 'org-pagina' + (p.selecionada ? ' selecionada' : '');
         el.dataset.id = p.id;
         el.dataset.originalIndex = p.originalIndex;
         el.draggable = true;
@@ -258,6 +284,7 @@ function montarOrganizarUI(container, foco) {
       const contadorEl = container.querySelector('#contador-selecionadas');
       if (contadorEl) contadorEl.textContent = `${selCount} selecionadas`;
       sincronizarInputIntervalo();
+      atualizarEstimativaSaida();
     }
 
     async function renderizarMiniatura(el) {
@@ -324,6 +351,68 @@ function montarOrganizarUI(container, foco) {
       const el = container.querySelector('#input-intervalo');
       if (el) el.value = '';
     }
+
+    const radioZip = container.querySelector('#org_saida_zip');
+    const radioSep = container.querySelector('#org_saida_sep');
+    const avisoSep = container.querySelector('#org-aviso-separados');
+    if (radioZip && radioSep) {
+      function aoMudarSaida() {
+        avisoSep.style.display = (radioSep.checked && parseInt(container.querySelector('#org-qtd-arquivos').textContent) >= 6) ? 'block' : 'none';
+      }
+      radioZip.onchange = aoMudarSaida;
+      radioSep.onchange = aoMudarSaida;
+    }
+
+    function atualizarEstimativaSaida() {
+      const boxZip = container.querySelector('#org-box-zip');
+      if (!boxZip) return;
+
+      let qtdArquivos = 1;
+      let ativadorZip = false;
+
+      let alvoPlan = plano;
+      if (foco.acaoFixa === 'extrair') alvoPlan = plano.filter(p => p.selecionado);
+
+      if (alvoPlan.length === 0) {
+        boxZip.style.display = 'none';
+        return;
+      }
+
+      if (foco.acaoFixa === 'dividir-n') {
+        const paramEl = container.querySelector('#input-param');
+        const param = paramEl ? Math.max(1, parseFloat(paramEl.value)) : 1;
+        qtdArquivos = Math.ceil(alvoPlan.length / param);
+        ativadorZip = qtdArquivos > 1;
+      } else if (foco.acaoFixa === 'dividir-tamanho') {
+        const paramEl = container.querySelector('#input-param');
+        const param = paramEl ? parseFloat(paramEl.value) : 10;
+        if (fileOrig) {
+           qtdArquivos = Math.max(1, Math.ceil((fileOrig.size / (1024*1024)) / param));
+           if (qtdArquivos > 1) ativadorZip = true;
+        }
+      } else if (foco.acaoFixa === 'extrair') {
+        const chkUmPorPag = container.querySelector('#check-um-por-pagina');
+        if (chkUmPorPag && chkUmPorPag.checked) {
+           qtdArquivos = alvoPlan.length;
+           ativadorZip = qtdArquivos > 1;
+        }
+      }
+
+      if (ativadorZip) {
+        boxZip.style.display = 'block';
+        container.querySelector('#org-qtd-arquivos').textContent = qtdArquivos + (foco.acaoFixa === 'dividir-tamanho' ? ' (est)' : '');
+        if (qtdArquivos >= 6) { if(radioZip) radioZip.checked = true; }
+        else { if(radioSep) radioSep.checked = true; }
+        if (radioZip && radioZip.onchange) radioZip.onchange(); 
+      } else {
+        boxZip.style.display = 'none';
+      }
+    }
+
+    const paramElChange = container.querySelector('#input-param');
+    if (paramElChange) paramElChange.addEventListener('input', atualizarEstimativaSaida);
+    const checkUmPorPagChange = container.querySelector('#check-um-por-pagina');
+    if (checkUmPorPagChange) checkUmPorPagChange.addEventListener('change', atualizarEstimativaSaida);
 
     // --- OPERAÇÕES ---
     if (foco.mostrarGirar) {
@@ -412,28 +501,45 @@ function montarOrganizarUI(container, foco) {
 
     // --- AÇÃO FINAL ---
     container.querySelector('#btn-gerar').onclick = async () => {
-      const acao = foco.acaoFixa;
+      let acao = foco.acaoFixa;
       let planoTrabalho = [...plano];
 
       if (planoTrabalho.length === 0) return alert("O PDF final ficaria sem páginas.");
 
+      let acaoAtual = acao;
       if (acao === 'extrair') {
         planoTrabalho = planoTrabalho.filter(p => p.selecionado);
         if (planoTrabalho.length === 0) return alert("Selecione as páginas que deseja extrair.");
+        
+        const chk = container.querySelector('#check-um-por-pagina');
+        if (chk && chk.checked) {
+           acaoAtual = 'dividir-n';
+        }
       }
 
       const paramEl = container.querySelector('#input-param');
       const param = paramEl ? parseFloat(paramEl.value) : null;
+      const paramFinal = acaoAtual === 'dividir-n' && acao === 'extrair' ? 1 : param;
 
       const btnGerar = container.querySelector('#btn-gerar');
       btnGerar.disabled = true;
       try {
         await PDFTools.carregarLib('pdf-lib');
-        const partes = await aplicarEdicoes(fileOrig, planoTrabalho, acao, param, (pct, txt) => progresso.atualizar(pct, txt));
+        const partes = await aplicarEdicoes(fileOrig, planoTrabalho, acaoAtual, paramFinal, (pct, txt) => progresso.atualizar(pct, txt));
+
+        const radioZipOut = container.querySelector('#org_saida_zip');
+        const usarZip = radioZipOut && radioZipOut.checked && partes.length > 1;
 
         if (partes.length === 1) {
           PDFTools.baixar(partes[0], `${nomeOriginal}${foco.sufixoArquivo}.pdf`);
           PDFTools.UI.mostrarToast('Documento gerado com sucesso!', 'sucesso');
+        } else if (usarZip) {
+          progresso.atualizar(95, 'Montando arquivo ZIP...');
+          await new Promise(r => setTimeout(r, 50));
+          const arrBlobs = partes.map((b, i) => ({ nome: `${nomeOriginal}-parte-${String(i+1).padStart(3,'0')}.pdf`, blob: b }));
+          const zipBlob = await PDFTools.gerarZip(arrBlobs, (pct, txt) => progresso.atualizar(95 + (pct*0.05), txt));
+          PDFTools.baixar(zipBlob, `${nomeOriginal}-partes.zip`);
+          PDFTools.UI.mostrarToast('ZIP gerado com sucesso!', 'sucesso');
         } else {
           PDFTools.UI.mostrarToast(`Gerados ${partes.length} arquivos. O download iniciará em sequência.`, 'sucesso');
           for(let i=0; i<partes.length; i++) {
@@ -473,7 +579,7 @@ const FOCOS_ORGANIZAR = [
     descricao: 'Selecione páginas específicas e gere um novo PDF só com elas.',
     mostrarSelecao: true, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: false,
     acaoFixa: 'extrair', labelBotao: 'Extrair e Baixar', sufixoArquivo: '-extraido',
-    paramLabel: null, paramValor: null
+    paramLabel: null, paramValor: null, mostrarCheckUmPorPagina: true
   },
   {
     id: 'reordenar_paginas', nome: 'Reordenar Páginas',
