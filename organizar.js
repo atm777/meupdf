@@ -204,6 +204,40 @@ function montarOrganizarUI(container, foco) {
       }
     };
 
+    const inputParam = container.querySelector('#input-param');
+    if (inputParam && foco.acaoFixa === 'dividir-tamanho') {
+      const btnManter = document.createElement('button');
+      btnManter.textContent = 'Manter valor original';
+      btnManter.className = 'org-btn';
+      btnManter.style.display = 'none';
+      btnManter.style.marginLeft = '8px';
+      btnManter.style.fontSize = '12px';
+      
+      inputParam.parentNode.style.display = 'flex';
+      inputParam.parentNode.style.alignItems = 'center';
+      inputParam.parentNode.appendChild(btnManter);
+      
+      let valorOriginal = inputParam.value;
+      
+      inputParam.addEventListener('focus', () => {
+         valorOriginal = inputParam.value;
+      });
+      
+      inputParam.addEventListener('blur', () => {
+         if (inputParam.value !== valorOriginal) {
+            btnManter.style.display = 'inline-block';
+            atualizarEstimativaSaida();
+         }
+      });
+      
+      btnManter.addEventListener('click', () => {
+         inputParam.value = valorOriginal;
+         btnManter.style.display = 'none';
+         atualizarEstimativaSaida();
+      });
+    }
+
+
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.key === 'z' && telaTrabalho.style.display !== 'none') {
         container.querySelector('#btn-desfazer').click();
@@ -410,7 +444,9 @@ function montarOrganizarUI(container, foco) {
     }
 
     const paramElChange = container.querySelector('#input-param');
-    if (paramElChange) paramElChange.addEventListener('input', atualizarEstimativaSaida);
+    if (paramElChange && foco.acaoFixa !== 'dividir-tamanho') {
+       paramElChange.addEventListener('input', atualizarEstimativaSaida);
+    }
     const checkUmPorPagChange = container.querySelector('#check-um-por-pagina');
     if (checkUmPorPagChange) checkUmPorPagChange.addEventListener('change', atualizarEstimativaSaida);
 
@@ -520,6 +556,7 @@ function montarOrganizarUI(container, foco) {
       const paramEl = container.querySelector('#input-param');
       const param = paramEl ? parseFloat(paramEl.value) : null;
       const paramFinal = acaoAtual === 'dividir-n' && acao === 'extrair' ? 1 : param;
+
 
       const btnGerar = container.querySelector('#btn-gerar');
       btnGerar.disabled = true;
@@ -636,34 +673,51 @@ async function aplicarEdicoes(fileOrig, planoFinal, acao, param, aoProgredir) {
   await new Promise(r => setTimeout(r, 0));
 
   if (acao === 'dividir-tamanho') {
-    let docAtual = await PDFDocument.create();
     let maxBytes = param * 1024 * 1024;
+    
+    aoProgredir(10, "Sondando peso base do PDF...");
+    let docVazio = await PDFDocument.create();
+    let pisoBytes = (await docVazio.save()).length;
+    
+    let docPrimeira = await PDFDocument.create();
+    const [p0] = await docPrimeira.copyPages(docOriginal, [planoFinal[0].originalIndex]);
+    aplicarTransformacoes(p0, planoFinal[0], degrees);
+    docPrimeira.addPage(p0);
+    let custoPrimeira = (await docPrimeira.save()).length - pisoBytes;
+    
+    let custoPorPagina = Math.max(1024, custoPrimeira); // Nunca menor que 1KB
+    
+    let docAtual = await PDFDocument.create();
+    let estimativaAtual = pisoBytes;
 
     for (let i = 0; i < numTotal; i++) {
-      aoProgredir(10 + (i/numTotal)*80, `Processando página ${i+1} de ${numTotal}...`);
+      aoProgredir(20 + (i/numTotal)*70, `Processando página ${i+1} de ${numTotal}...`);
       await new Promise(r => setTimeout(r, 0));
+
+      // Se a estimativa passar do limite E já houver pelo menos uma página neste documento, finaliza-o
+      if (estimativaAtual + custoPorPagina > maxBytes && docAtual.getPageCount() > 0) {
+        partes.push(new Blob([await docAtual.save()], { type: 'application/pdf' }));
+        docAtual = await PDFDocument.create();
+        estimativaAtual = pisoBytes;
+      }
 
       const pData = planoFinal[i];
       const [copiedPage] = await docAtual.copyPages(docOriginal, [pData.originalIndex]);
       aplicarTransformacoes(copiedPage, pData, degrees);
       docAtual.addPage(copiedPage);
+      
+      estimativaAtual += custoPorPagina;
 
-      const bytes = await docAtual.save();
-      if (bytes.length > maxBytes && docAtual.getPageCount() > 1) {
-        // Estourou o limite, remove a última página que acabou de adicionar
-        docAtual.removePage(docAtual.getPageCount() - 1);
-        const finalBytes = await docAtual.save();
-        partes.push(new Blob([finalBytes], { type: 'application/pdf' }));
-
-        // Inicia novo doc com a página que estourou
-        docAtual = await PDFDocument.create();
-        const [newCopiedPage] = await docAtual.copyPages(docOriginal, [pData.originalIndex]);
-        aplicarTransformacoes(newCopiedPage, pData, degrees);
-        docAtual.addPage(newCopiedPage);
+      // Recalibra apenas no primeiro save para não fazer save() em toda página
+      if (docAtual.getPageCount() === 1) {
+         let tamanhoRealAtual = (await docAtual.save()).length;
+         estimativaAtual = tamanhoRealAtual;
+         custoPorPagina = Math.max(1024, tamanhoRealAtual - pisoBytes);
       }
     }
+    
     if (docAtual.getPageCount() > 0) {
-      partes.push(new Blob([await docAtual.save()], { type: 'application/pdf' }));
+       partes.push(new Blob([await docAtual.save()], { type: 'application/pdf' }));
     }
 
   } else if (acao === 'dividir-n') {

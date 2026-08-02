@@ -381,13 +381,23 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
                let imgBytes = pdfObject.contents;
                
                // Se tem FlateDecode antes do DCTDecode, descomprime a camada Flate
-               if (filtrosStr[0] === 'FlateDecode' && window.DecompressionStream) {
-                 const ds = new DecompressionStream('deflate');
-                 const writer = ds.writable.getWriter();
-                 writer.write(imgBytes);
-                 writer.close();
-                 const res = new Response(ds.readable);
-                 imgBytes = new Uint8Array(await res.arrayBuffer());
+               if (filtrosStr[0] === 'FlateDecode') {
+                 if (window.DecompressionStream) {
+                   const ds = new DecompressionStream('deflate');
+                   const writer = ds.writable.getWriter();
+                   writer.write(imgBytes);
+                   writer.close();
+                   const res = new Response(ds.readable);
+                   imgBytes = new Uint8Array(await res.arrayBuffer());
+                 } else {
+                   if (!window.fflate) {
+                     const script = document.createElement('script');
+                     script.src = 'https://unpkg.com/fflate@0.8.2/umd/index.js';
+                     document.head.appendChild(script);
+                     await new Promise(r => script.onload = r);
+                   }
+                   imgBytes = window.fflate.unzlibSync(imgBytes);
+                 }
                }
 
                const novoJpgBytes = await recomprimirJpeg(imgBytes, q);
