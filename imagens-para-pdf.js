@@ -125,7 +125,13 @@ PDFTools.registrar({
 
     const btnGerar = PDFTools.UI.criarBotaoPrincipal('Gerar PDF', async () => {
       if (itens.length === 0) return;
-      
+
+      if (itens.length > LIMITE_QTD_RECOMENDADO) {
+        if (!confirm(`Você está prestes a processar ${itens.length} imagens de uma vez. Em celulares, mais de ${LIMITE_QTD_RECOMENDADO} imagens (principalmente em alta resolução) pode deixar o navegador lento ou travar. Deseja continuar?`)) {
+          return;
+        }
+      }
+
       const totalMb = itens.reduce((acc, i) => acc + i.file.size, 0) / (1024 * 1024);
       if (totalMb > PDFTools.LIMITE_AVISO_MB) {
         if (!confirm(`Você está prestes a processar ${totalMb.toFixed(1)} MB de imagens. Isso pode demorar e travar aparelhos mais fracos. Deseja continuar?`)) {
@@ -289,6 +295,7 @@ async function carregarImagem(file) {
   });
 }
 
+const LIMITE_QTD_RECOMENDADO = 30;
 const TAMANHOS = { a4: [595.28, 841.89], carta: [612, 792] };
 const MARGENS = { nenhuma: 0, pequena: 20, media: 50 };
 const QUALIDADE = {
