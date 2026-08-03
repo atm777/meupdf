@@ -146,7 +146,7 @@ PDFTools.registrar({
         await PDFTools.carregarLib('pdf-lib');
         
         arqBuffer = await PDFTools.lerComoArrayBuffer(file);
-        pdfDocJs = await window.pdfjsLib.getDocument({ data: arqBuffer }).promise;
+        pdfDocJs = await window.pdfjsLib.getDocument({ data: arqBuffer.slice(0) }).promise;
         numPages = pdfDocJs.numPages;
         pdfDocLib = await window.PDFLib.PDFDocument.load(arqBuffer, { ignoreEncryption: true });
         

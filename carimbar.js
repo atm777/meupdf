@@ -340,7 +340,7 @@ PDFTools.registrar({
 PDFTools.registrar({
   id: 'marca_dagua',
   nome: "Marca d'Água",
-  descricao: 'Adicione um carimbo de texto (ex: CONFIDENCIAL) sobre todas as páginas.',
+  descricao: "Adicione um carimbo de texto (ex: CONFIDENCIAL) ou uma imagem (logo em PNG/JPG) sobre todas as páginas.",
   precisa: ['pdf-lib', 'pdfjs'],
   montarUI: (container) => montarCarimboUI(container, 'marca')
 });

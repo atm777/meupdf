@@ -628,13 +628,12 @@ async function assinarLote(fileOrig, assinaturasMap, aoProgredir) {
   const buffer = await PDFTools.lerComoArrayBuffer(fileOrig);
   const { PDFDocument, StandardFonts, rgb, degrees } = window.PDFLib;
   
-  const docOriginal = await PDFDocument.load(buffer, { ignoreEncryption: true });
-  const novoDoc = await PDFDocument.create();
+  const novoDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
   
   // Limpar metadados é praxe
   novoDoc.setTitle(''); novoDoc.setAuthor(''); novoDoc.setSubject(''); novoDoc.setKeywords([]); novoDoc.setProducer(''); novoDoc.setCreator('');
 
-  const numPages = docOriginal.getPageCount();
+  const numPages = novoDoc.getPageCount();
   const font = await novoDoc.embedFont(StandardFonts.Helvetica);
   
   // Cache de imagens embutidas para não embutir o mesmo PNG 50 vezes e inchar o PDF
@@ -645,8 +644,7 @@ async function assinarLote(fileOrig, assinaturasMap, aoProgredir) {
     await new Promise(r => setTimeout(r, 0));
 
     const itens = assinaturasMap[i];
-    const [page] = await novoDoc.copyPages(docOriginal, [i]);
-    novoDoc.addPage(page);
+    const page = novoDoc.getPage(i);
 
     if (itens && itens.length > 0) {
       // page.getSize() retorna sempre as dimensões BRUTAS do MediaBox (não muda com /Rotate).

@@ -234,7 +234,7 @@ PDFTools.registrar({
            btnManterOrig.style.display = 'none';
            
            if (pReducao < 5) {
-             msgDiv.innerHTML = `Reduzi apenas <strong>${pReducao}%</strong>. Motivo: ${result.imagensIgnoradas} das ${result.totalImagensOriginal} imagens estão em formato nativo sem suporte a recompressão, ou o PDF é de texto/vetor já otimizado.`;
+             msgDiv.innerHTML = `Reduzi apenas <strong>${pReducao}%</strong>. Motivo: ${result.imagensIgnoradas} das ${result.totalImagensOriginal} imagens possuem filtros complexos que não pude tratar, ou o arquivo já está otimizado.`;
            } else {
              msgDiv.innerHTML = `Compressão finalizada com sucesso após ${result.tentativas} iteração(ões)! Redução de ${pReducao}%.`;
            }
@@ -377,6 +377,9 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
            const filtrosStr = obterFiltrosStr(filter, PDFName, PDFArray);
            
            if (filtrosStr.includes('DCTDecode')) {
+             if (filtrosStr.includes('ASCII85Decode') || filtrosStr.includes('ASCIIHexDecode')) {
+                continue; // Ignorado por pré-filtros não suportados
+             }
              try {
                let imgBytes = pdfObject.contents;
                

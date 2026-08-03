@@ -190,7 +190,6 @@ PDFTools.registrar({
         } catch(e) {}
 
         // --- Alertas Corretivos ---
-        const alertas = container.querySelector('#ip-alertas');
         alertas.innerHTML = '';
         
         // Alerta Metadados
