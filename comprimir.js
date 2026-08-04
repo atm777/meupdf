@@ -347,12 +347,14 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
   let qMin = 0.15; // Não descer abaixo de 15% senão vira borrão irrecuperável
   let qMax = 0.85; 
   
-  const numTentativas = alvoBytes ? 6 : 1;
+  const tamanhoOrig = bufferOriginal.byteLength || bufferOriginal.length;
+  const jaEMenorQueAlvo = alvoBytes && (tamanhoOrig <= alvoBytes);
+  const numTentativas = (alvoBytes && !jaEMenorQueAlvo) ? 6 : 1;
   let ultimaQualidadeUsada = 0;
   
   for (let t = 0; t < numTentativas; t++) {
     tentativas++;
-    let q = alvoBytes ? (qMin + qMax) / 2 : qualidadeFixa;
+    let q = (alvoBytes && !jaEMenorQueAlvo) ? (qMin + qMax) / 2 : (jaEMenorQueAlvo ? 0.5 : qualidadeFixa);
     ultimaQualidadeUsada = q;
     
     aoProgredir((t / numTentativas) * 100, `Tentativa ${t+1} de ${numTentativas} (Teste a ${Math.round(q*100)}%)...`);
@@ -385,13 +387,14 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
                
                // Se tem FlateDecode antes do DCTDecode, descomprime a camada Flate
                if (filtrosStr[0] === 'FlateDecode') {
-                 if (window.DecompressionStream) {
-                   const ds = new DecompressionStream('deflate');
-                   const writer = ds.writable.getWriter();
-                   writer.write(imgBytes);
-                   writer.close();
-                   const res = new Response(ds.readable);
-                   imgBytes = new Uint8Array(await res.arrayBuffer());
+                  if (window.DecompressionStream) {
+                    const ds = new DecompressionStream('deflate');
+                    const writer = ds.writable.getWriter();
+                    const writePromise = writer.write(imgBytes).then(() => writer.close());
+                    const res = new Response(ds.readable);
+                    const bufPromise = res.arrayBuffer();
+                    await writePromise;
+                    imgBytes = new Uint8Array(await bufPromise);
                  } else {
                    if (!window.fflate) {
                      const script = document.createElement('script');
@@ -403,17 +406,21 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
                  }
                }
 
-               const novoJpgBytes = await recomprimirJpeg(imgBytes, q);
+               const resJpg = await recomprimirJpeg(imgBytes, q);
+               const novoJpgBytes = resJpg.bytes;
                
                // Modifica o stream diretamente em vez de vazar com embedJpg (Resolve A.2)
                pdfObject.contents = novoJpgBytes;
                pdfObject.dict.set(PDFName.of('Length'), PDFNumber.of(novoJpgBytes.length));
                pdfObject.dict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+               pdfObject.dict.set(PDFName.of('Width'), PDFNumber.of(resJpg.w));
+               pdfObject.dict.set(PDFName.of('Height'), PDFNumber.of(resJpg.h));
                pdfObject.dict.delete(PDFName.of('DecodeParms'));
+               pdfObject.dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
                
                imgProc++;
              } catch(e) {
-               // Falha ao ler a imagem ou descompressão
+               console.warn('Falha na imagem, mantendo original:', e.message);
              }
            }
         }
@@ -428,7 +435,7 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
     const finalBytes = await doc.save({ useObjectStreams: true });
     const atualTamanho = finalBytes.length;
     
-    if (alvoBytes) {
+    if (alvoBytes && !jaEMenorQueAlvo) {
       if (atualTamanho <= alvoBytes) {
         // Encontrou um que cabe. Guarda como melhor.
         melhorBlob = new Blob([finalBytes], { type: 'application/pdf' });
@@ -447,7 +454,7 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
         }
       }
     } else {
-      // Modo qualidade fixa - salva e para
+      // Modo qualidade fixa ou já menor que alvo - salva e para
       melhorBlob = new Blob([finalBytes], { type: 'application/pdf' });
       melhorTamanho = atualTamanho;
       break;
@@ -488,7 +495,7 @@ async function recomprimirJpeg(imgBytes, qualidade) {
       canvas.toBlob(async (newBlob) => {
         if (!newBlob) return reject(new Error('toBlob falhou'));
         const buf = await newBlob.arrayBuffer();
-        resolve(new Uint8Array(buf));
+        resolve({ bytes: new Uint8Array(buf), w, h });
       }, 'image/jpeg', qualidade);
     };
     img.onerror = () => {
