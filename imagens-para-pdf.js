@@ -49,7 +49,7 @@ PDFTools.registrar({
         let ignorados = 0;
         arquivos.forEach(file => {
           if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
-            alert(`O navegador não abre arquivos HEIC (${file.name}).\nNo iPhone, em Ajustes > Câmera > Formatos, escolha 'Mais compatível', ou compartilhe a foto pelo WhatsApp primeiro (isso converte para JPG).`);
+            alert(`O navegador não abre arquivos HEIC (${PDFTools.sanitizarNome(file.name)}).\nNo iPhone, em Ajustes > Câmera > Formatos, escolha 'Mais compatível', ou compartilhe a foto pelo WhatsApp primeiro (isso converte para JPG).`);
             return;
           }
           if (PDFTools.ehImagem(file)) {
@@ -217,8 +217,8 @@ PDFTools.registrar({
         el.draggable = true;
         
         el.innerHTML = `
-          <img src="${item.url}" class="img-thumb" alt="${item.file.name}">
-          <div class="img-nome" title="${item.file.name}">${item.file.name}</div>
+          <img src="${item.url}" class="img-thumb" alt="${PDFTools.sanitizarNome(item.file.name)}">
+          <div class="img-nome" title="${PDFTools.sanitizarNome(item.file.name)}">${PDFTools.sanitizarNome(item.file.name)}</div>
           <div class="img-acoes">
             <button class="btn-up" aria-label="Mover para cima">↑</button>
             <button class="del" aria-label="Remover">✕</button>
@@ -375,7 +375,7 @@ async function imagensParaPDF(arquivos, opcoes, aoProgredir) {
       sucesso++;
 
     } catch (err) {
-      erros.push(`${file.name}: Não foi possível ler a imagem.`);
+      erros.push(`${PDFTools.sanitizarNome(file.name)}: Não foi possível ler a imagem.`);
     }
   }
 

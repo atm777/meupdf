@@ -190,7 +190,10 @@ PDFTools.registrar({
         if (resultado.avisos.temFormulario) avisosHtml.push('• Formulários detectados (AcroForm) podem não funcionar perfeitamente no arquivo final.');
         
         if (avisosHtml.length > 0) {
-          avisoBox.innerHTML = '<strong>Observações:</strong><br>' + avisosHtml.join('<br>');
+          avisoBox.innerHTML = '<strong>Observações:</strong><br>';
+          const avisosContainer = document.createElement("div");
+          avisosContainer.innerHTML = avisosHtml.join("<br>");
+          avisoBox.appendChild(avisosContainer);
           avisoBox.style.display = 'block';
         }
 
@@ -268,7 +271,7 @@ PDFTools.registrar({
         el.innerHTML = `
           <div class="pdf-item-icone">📄</div>
           <div class="pdf-item-info">
-            <div class="pdf-item-title" title="${item.file.name}">${item.file.name}</div>
+            <div class="pdf-item-title" title="${PDFTools.sanitizarNome(item.file.name)}">${PDFTools.sanitizarNome(item.file.name)}</div>
             <div class="pdf-item-meta">${PDFTools.formatarTamanho(item.file.size)} • ${txtPaginas}</div>
           </div>
           <div class="pdf-acoes">
@@ -362,7 +365,7 @@ async function juntarPDFs(arquivos, opcoes, aoProgredir) {
     try {
       buffer = await PDFTools.lerComoArrayBuffer(file);
     } catch(e) {
-      throw new Error(`Falha ao ler o arquivo "${file.name}".`);
+      throw new Error(`Falha ao ler o arquivo "${PDFTools.sanitizarNome(file.name)}".`);
     }
 
     let pdfDoc;
@@ -370,9 +373,9 @@ async function juntarPDFs(arquivos, opcoes, aoProgredir) {
       pdfDoc = await PDFDocument.load(buffer);
     } catch (err) {
       if (err.message && err.message.toLowerCase().includes('encrypted')) {
-         throw new Error(`O arquivo "${file.name}" está protegido por senha.`);
+         throw new Error(`O arquivo "${PDFTools.sanitizarNome(file.name)}" está protegido por senha.`);
       }
-      throw new Error(`O arquivo "${file.name}" parece estar corrompido.`);
+      throw new Error(`O arquivo "${PDFTools.sanitizarNome(file.name)}" parece estar corrompido.`);
     }
 
     const form = pdfDoc.getForm();
