@@ -201,7 +201,10 @@ PDFTools.registrar({
       const params = {};
       if (modo === 'alvo') {
         const mb = parseFloat(container.querySelector('#input-alvo').value) || 2;
-        params.alvoBytes = mb * 1024 * 1024;
+        // Margem de segurança de 2,5%: o Windows exibe tamanho em unidades de 1024 (MiB
+        // rotulado "MB"), o que deixa pouca folga perto do limite. Tratamos o alvo internamente
+        // como um pouco menor do que o valor digitado, sem mudar o que a pessoa vê na tela.
+        params.alvoBytes = mb * 1024 * 1024 * 0.975;
       } else {
         params.qualidadeFixa = parseInt(container.querySelector('#input-qualidade').value) / 100;
       }

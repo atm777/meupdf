@@ -31,6 +31,14 @@ PDFTools.registrar({
         .ip-btn-acao:hover { background: var(--sup-2); }
         
         .ip-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; background: var(--sup-2); color: var(--texto); border: 1px solid var(--borda); margin-right: 4px; margin-bottom: 4px; }
+
+        .ip-campo { margin-bottom: 12px; }
+        .ip-campo label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--texto-2); }
+        .ip-input { width: 100%; padding: 8px; border: 1px solid var(--borda); border-radius: 4px; font-size: 14px; box-sizing: border-box; background: var(--sup); color: var(--texto); }
+        .ip-btn-limpar { padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; background: var(--cor-erro); color: white; }
+        .ip-btn-limpar:hover { background: #c82333; }
+        .ip-btn-salvar { padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; background: var(--cor-primaria); color: white; }
+        .ip-btn-salvar:hover { background: #004494; }
       `;
       document.head.appendChild(style);
     }
@@ -77,11 +85,36 @@ PDFTools.registrar({
           </div>
         </div>
 
+        <div class="ip-card" id="ip-card-metadados">
+          <div class="ip-card-header">Editar ou Limpar Metadados</div>
+          <div class="ip-card-body">
+            <div class="ip-campo"><label>Título</label><input type="text" id="ip-md-titulo" class="ip-input"></div>
+            <div class="ip-campo"><label>Autor</label><input type="text" id="ip-md-autor" class="ip-input"></div>
+            <div class="ip-campo"><label>Assunto</label><input type="text" id="ip-md-assunto" class="ip-input"></div>
+            <div class="ip-campo"><label>Palavras-chave (separadas por espaço)</label><input type="text" id="ip-md-palavras" class="ip-input"></div>
+            <div class="ip-campo"><label>Criador (Software/App)</label><input type="text" id="ip-md-criador" class="ip-input"></div>
+            <div class="ip-campo"><label>Produtor (Motor PDF)</label><input type="text" id="ip-md-produtor" class="ip-input"></div>
+            <div style="display:flex; gap:8px;">
+              <button class="ip-btn-limpar" id="btn-ip-md-limpar" style="flex:1;">Limpar Tudo e Baixar</button>
+              <button class="ip-btn-salvar" id="btn-ip-md-salvar" style="flex:1;">Salvar Alterações</button>
+            </div>
+            <div id="ip-md-progresso" style="margin-top:16px;"></div>
+            <div id="ip-md-resultado" style="display:none; margin-top:16px;">
+              <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
+              <button id="btn-ip-md-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
+              <div id="ip-md-proximos-passos" style="margin-top:16px;"></div>
+            </div>
+          </div>
+        </div>
+
       </div>
     `;
 
     const drop = PDFTools.UI.criarDropzone({ multiplo: false, aceita: '.pdf', onArquivos: a => abrirArquivo(a[0]) });
     container.querySelector('#ip-tela-inicial').appendChild(drop);
+
+    const progressoMd = PDFTools.UI.criarProgresso();
+    container.querySelector('#ip-md-progresso').appendChild(progressoMd.elemento);
 
     function setValorSeguro(elId, str) {
       const el = container.querySelector(elId);
@@ -97,22 +130,30 @@ PDFTools.registrar({
         await PDFTools.carregarLib('pdf-lib');
         
         arqBuffer = await PDFTools.lerComoArrayBuffer(file);
-        pdfDocLib = await window.PDFLib.PDFDocument.load(arqBuffer, { ignoreEncryption: true });
+        pdfDocLib = await window.PDFLib.PDFDocument.load(arqBuffer, { ignoreEncryption: true, updateMetadata: false });
         pdfDocJs = await window.pdfjsLib.getDocument({ data: arqBuffer }).promise;
-        
+
         // Identidade
         setValorSeguro('#ip-titulo', pdfDocLib.getTitle());
         setValorSeguro('#ip-autor', pdfDocLib.getAuthor());
         setValorSeguro('#ip-assunto', pdfDocLib.getSubject());
-        
+
         // Origem
         setValorSeguro('#ip-criador', pdfDocLib.getCreator());
         setValorSeguro('#ip-produtor', pdfDocLib.getProducer());
-        
+
         const cr = pdfDocLib.getCreationDate(); const mo = pdfDocLib.getModificationDate();
         setValorSeguro('#ip-criacao', cr ? cr.toLocaleString() : null);
         setValorSeguro('#ip-modificacao', mo ? mo.toLocaleString() : null);
-        
+
+        // Campos editáveis do card "Editar ou Limpar Metadados"
+        container.querySelector('#ip-md-titulo').value = pdfDocLib.getTitle() || '';
+        container.querySelector('#ip-md-autor').value = pdfDocLib.getAuthor() || '';
+        container.querySelector('#ip-md-assunto').value = pdfDocLib.getSubject() || '';
+        container.querySelector('#ip-md-palavras').value = (pdfDocLib.getKeywords() || []).join(' ');
+        container.querySelector('#ip-md-criador').value = pdfDocLib.getCreator() || '';
+        container.querySelector('#ip-md-produtor').value = pdfDocLib.getProducer() || '';
+
         // Estrutura
         const numP = pdfDocLib.getPageCount();
         container.querySelector('#ip-pags').innerHTML = numP;
@@ -196,15 +237,16 @@ PDFTools.registrar({
         if (pdfDocLib.getAuthor() || pdfDocLib.getCreator()) {
            const div = document.createElement('div');
            div.className = 'ip-alerta';
+           div.id = 'ip-alerta-metadados';
            div.innerHTML = `
              <div style="flex:1;">
                <strong>Metadados Vazados:</strong> O arquivo contém o nome do autor original ou software de criação. Em documentos enviados anonimamente, isso quebra o sigilo.
              </div>
-             <button class="ip-btn-acao" id="btn-ir-metadados">Ir para ferramenta de Limpar</button>
+             <button class="ip-btn-acao" id="btn-ir-metadados">Limpar Metadados Agora</button>
            `;
            alertas.appendChild(div);
            div.querySelector('#btn-ir-metadados').addEventListener('click', () => {
-             PDFTools.irParaFerramenta('editar_metadados');
+             salvarMetadados(true);
            });
         }
         
@@ -256,6 +298,71 @@ PDFTools.registrar({
         else container.querySelector('#ip-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido', e.message);
       }
     }
+
+    // Limpar ou editar os metadados sem sair da tela de inspeção — antes isso exigia navegar
+    // para uma ferramenta "Editar Metadados" separada, o que era desnecessário: o arquivo já
+    // está carregado aqui mesmo.
+    async function salvarMetadados(isLimpeza) {
+      progressoMd.atualizar(10, 'Aplicando metadados...');
+      try {
+        if (isLimpeza) {
+          container.querySelector('#ip-md-titulo').value = '';
+          container.querySelector('#ip-md-autor').value = '';
+          container.querySelector('#ip-md-assunto').value = '';
+          container.querySelector('#ip-md-palavras').value = '';
+          container.querySelector('#ip-md-criador').value = '';
+          container.querySelector('#ip-md-produtor').value = '';
+        }
+
+        pdfDocLib.setTitle(container.querySelector('#ip-md-titulo').value);
+        pdfDocLib.setAuthor(container.querySelector('#ip-md-autor').value);
+        pdfDocLib.setSubject(container.querySelector('#ip-md-assunto').value);
+
+        const kw = container.querySelector('#ip-md-palavras').value.split(' ').filter(k => k.trim() !== '');
+        pdfDocLib.setKeywords(kw);
+
+        pdfDocLib.setCreator(container.querySelector('#ip-md-criador').value);
+        pdfDocLib.setProducer(container.querySelector('#ip-md-produtor').value);
+
+        const agora = new Date();
+        if (isLimpeza) pdfDocLib.setCreationDate(agora);
+        pdfDocLib.setModificationDate(agora);
+
+        progressoMd.atualizar(60, 'Salvando...');
+        await new Promise(r => setTimeout(r, 0));
+
+        const bytes = await pdfDocLib.save();
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+
+        const nomeFinal = PDFTools.nomeSemExtensao(fileOrig.name) + (isLimpeza ? '-limpo.pdf' : '-meta.pdf');
+        PDFTools.baixar(blob, nomeFinal);
+        PDFTools.UI.mostrarToast('Metadados atualizados com sucesso!', 'sucesso');
+
+        const alertaMetadados = container.querySelector('#ip-alerta-metadados');
+        if (alertaMetadados) alertaMetadados.style.display = 'none';
+
+        const resArea = container.querySelector('#ip-md-resultado');
+        resArea.style.display = 'block';
+        container.querySelector('#btn-ip-md-baixar-novamente').onclick = () => PDFTools.baixar(blob, nomeFinal);
+        const proxContainer = container.querySelector('#ip-md-proximos-passos');
+        proxContainer.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob, nomeArquivo: nomeFinal, origemId: 'inspecionar_pdf', tamanhoBytes: blob.size
+        });
+        if (prox) proxContainer.appendChild(prox);
+        PDFTools.registrarAcaoSessao(isLimpeza ? 'Limpou os metadados' : 'Editou os metadados');
+
+        container.querySelector('#ip-card-metadados').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (e) {
+        console.error(e);
+        PDFTools.UI.mostrarToast('Erro ao salvar.', 'erro');
+      } finally {
+        progressoMd.esconder();
+      }
+    }
+
+    container.querySelector('#btn-ip-md-limpar').onclick = () => salvarMetadados(true);
+    container.querySelector('#btn-ip-md-salvar').onclick = () => salvarMetadados(false);
 
     if (arquivoInicial) abrirArquivo(arquivoInicial);
   }

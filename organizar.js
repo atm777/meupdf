@@ -65,6 +65,12 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
       </div>
     `;
 
+    const explicacaoHTML = foco.explicacao ? `
+      <div class="org-painel" style="margin-bottom:16px; font-size:13px; color:var(--texto-2); line-height:1.5;">
+        <strong style="color:var(--texto);">Como funciona:</strong> ${foco.explicacao}
+      </div>
+    ` : '';
+
     const selecaoBarHTML = foco.mostrarSelecao ? `
       <div class="org-selecao-bar">
         <span style="font-weight:bold; font-size:14px; margin-right:8px;">Seleção:</span>
@@ -78,12 +84,37 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
       </div>
     ` : '';
 
-    const paramBlocoHTML = foco.paramLabel ? `
+    const escolhaDivisaoHTML = foco.mostrarEscolhaDivisao ? `
+      <div class="org-grupo-opcoes">
+        <label>Como dividir?</label>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal; font-size:13px;">
+            <input type="radio" name="org-modo-divisao" id="org-modo-qtd" value="quantidade" checked>
+            Por quantidade de páginas
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-weight:normal; font-size:13px;">
+            <input type="radio" name="org-modo-divisao" id="org-modo-mb" value="tamanho">
+            Por tamanho (MB)
+          </label>
+        </div>
+      </div>
+    ` : '';
+
+    const paramBlocoHTML = foco.mostrarEscolhaDivisao ? `
+      <div class="org-grupo-opcoes" id="org-param-qtd-wrap">
+        <label>Qtd de páginas por arquivo</label>
+        <input type="number" id="input-param-qtd" class="org-input" min="1" value="5">
+      </div>
+      <div class="org-grupo-opcoes" id="org-param-mb-wrap" style="display:none;">
+        <label>Tamanho máximo (MB)</label>
+        <input type="number" id="input-param-mb" class="org-input" min="1" value="10">
+      </div>
+    ` : (foco.paramLabel ? `
       <div class="org-grupo-opcoes">
         <label>${foco.paramLabel}</label>
         <input type="number" id="input-param" class="org-input" min="1" value="${foco.paramValor}">
       </div>
-    ` : '';
+    ` : '');
 
     const checkUmPorPagHTML = foco.mostrarCheckUmPorPagina ? `
       <div class="org-grupo-opcoes" style="margin-top:12px;">
@@ -113,6 +144,7 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
       <div id="org-tela-inicial"></div>
       <div id="org-tela-trabalho" style="display:none;" class="org-grid-layout">
         <div class="org-main">
+          ${explicacaoHTML}
           ${selecaoBarHTML}
           <div class="org-grade-paginas" id="org-grade"></div>
         </div>
@@ -120,6 +152,7 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
           ${painelEdicaoHTML}
           <div class="org-painel">
             <h3 style="margin-top:0; margin-bottom:16px; font-size:16px;">Exportar</h3>
+            ${escolhaDivisaoHTML}
             ${paramBlocoHTML}
             ${checkUmPorPagHTML}
             ${boxZipHTML}
@@ -209,34 +242,71 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
       }
     };
 
+    // Ferramenta única "Dividir PDF": qual modo (quantidade x tamanho) está ativo agora,
+    // e o parâmetro correspondente — usado tanto na estimativa quanto na geração final.
+    function obterAcaoAtual() {
+      if (!foco.mostrarEscolhaDivisao) return foco.acaoFixa;
+      const radioMb = container.querySelector('#org-modo-mb');
+      return (radioMb && radioMb.checked) ? 'dividir-tamanho' : 'dividir-n';
+    }
+    function obterParamAtual() {
+      if (!foco.mostrarEscolhaDivisao) {
+        const el = container.querySelector('#input-param');
+        return el ? parseFloat(el.value) : null;
+      }
+      const el = container.querySelector(obterAcaoAtual() === 'dividir-tamanho' ? '#input-param-mb' : '#input-param-qtd');
+      return el ? parseFloat(el.value) : null;
+    }
+
+    if (foco.mostrarEscolhaDivisao) {
+      const radioQtd = container.querySelector('#org-modo-qtd');
+      const radioMb = container.querySelector('#org-modo-mb');
+      const wrapQtd = container.querySelector('#org-param-qtd-wrap');
+      const wrapMb = container.querySelector('#org-param-mb-wrap');
+      function aoMudarModoDivisao() {
+        const ehMb = radioMb.checked;
+        wrapQtd.style.display = ehMb ? 'none' : 'block';
+        wrapMb.style.display = ehMb ? 'block' : 'none';
+        atualizarEstimativaSaida();
+      }
+      radioQtd.onchange = aoMudarModoDivisao;
+      radioMb.onchange = aoMudarModoDivisao;
+
+      const inputQtd = container.querySelector('#input-param-qtd');
+      if (inputQtd) inputQtd.addEventListener('input', atualizarEstimativaSaida);
+    }
+
     const inputParam = container.querySelector('#input-param');
-    if (inputParam && foco.acaoFixa === 'dividir-tamanho') {
+    const inputParamMb = container.querySelector('#input-param-mb');
+    const inputTamanhoMB = foco.mostrarEscolhaDivisao ? inputParamMb : (foco.acaoFixa === 'dividir-tamanho' ? inputParam : null);
+    if (inputTamanhoMB) {
       const btnManter = document.createElement('button');
       btnManter.textContent = 'Manter valor original';
       btnManter.className = 'org-btn';
       btnManter.style.display = 'none';
       btnManter.style.marginLeft = '8px';
       btnManter.style.fontSize = '12px';
-      
-      inputParam.parentNode.style.display = 'flex';
-      inputParam.parentNode.style.alignItems = 'center';
-      inputParam.parentNode.appendChild(btnManter);
-      
-      let valorOriginal = inputParam.value;
-      
-      inputParam.addEventListener('focus', () => {
-         valorOriginal = inputParam.value;
+
+      // Não mexe no display do wrap pai: no modo unificado ele também controla se o campo
+      // de tamanho está visível (alternando com o de quantidade), e input+button já ficam
+      // lado a lado por padrão (ambos inline-block) sem precisar forçar flex aqui.
+      inputTamanhoMB.parentNode.appendChild(btnManter);
+
+      let valorOriginal = inputTamanhoMB.value;
+
+      inputTamanhoMB.addEventListener('focus', () => {
+         valorOriginal = inputTamanhoMB.value;
       });
-      
-      inputParam.addEventListener('blur', () => {
-         if (inputParam.value !== valorOriginal) {
+
+      inputTamanhoMB.addEventListener('blur', () => {
+         if (inputTamanhoMB.value !== valorOriginal) {
             btnManter.style.display = 'inline-block';
             atualizarEstimativaSaida();
          }
       });
-      
+
       btnManter.addEventListener('click', () => {
-         inputParam.value = valorOriginal;
+         inputTamanhoMB.value = valorOriginal;
          btnManter.style.display = 'none';
          atualizarEstimativaSaida();
       });
@@ -417,14 +487,14 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
         return;
       }
 
-      if (foco.acaoFixa === 'dividir-n') {
-        const paramEl = container.querySelector('#input-param');
-        const param = paramEl ? Math.max(1, parseFloat(paramEl.value)) : 1;
+      const acaoAtualEstimativa = obterAcaoAtual();
+
+      if (acaoAtualEstimativa === 'dividir-n') {
+        const param = Math.max(1, obterParamAtual() || 1);
         qtdArquivos = Math.ceil(alvoPlan.length / param);
         ativadorZip = qtdArquivos > 1;
-      } else if (foco.acaoFixa === 'dividir-tamanho') {
-        const paramEl = container.querySelector('#input-param');
-        const param = paramEl ? parseFloat(paramEl.value) : 10;
+      } else if (acaoAtualEstimativa === 'dividir-tamanho') {
+        const param = obterParamAtual() || 10;
         if (fileOrig) {
            qtdArquivos = Math.max(1, Math.ceil((fileOrig.size / (1024*1024)) / param));
            if (qtdArquivos > 1) ativadorZip = true;
@@ -439,17 +509,17 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
 
       if (ativadorZip) {
         boxZip.style.display = 'block';
-        container.querySelector('#org-qtd-arquivos').textContent = qtdArquivos + (foco.acaoFixa === 'dividir-tamanho' ? ' (est)' : '');
+        container.querySelector('#org-qtd-arquivos').textContent = qtdArquivos + (acaoAtualEstimativa === 'dividir-tamanho' ? ' (est)' : '');
         if (qtdArquivos >= 6) { if(radioZip) radioZip.checked = true; }
         else { if(radioSep) radioSep.checked = true; }
-        if (radioZip && radioZip.onchange) radioZip.onchange(); 
+        if (radioZip && radioZip.onchange) radioZip.onchange();
       } else {
         boxZip.style.display = 'none';
       }
     }
 
     const paramElChange = container.querySelector('#input-param');
-    if (paramElChange && foco.acaoFixa !== 'dividir-tamanho') {
+    if (paramElChange && !foco.mostrarEscolhaDivisao) {
        paramElChange.addEventListener('input', atualizarEstimativaSaida);
     }
     const checkUmPorPagChange = container.querySelector('#check-um-por-pagina');
@@ -542,7 +612,7 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
 
     // --- AÇÃO FINAL ---
     container.querySelector('#btn-gerar').onclick = async () => {
-      let acao = foco.acaoFixa;
+      let acao = obterAcaoAtual();
       let planoTrabalho = [...plano];
 
       if (planoTrabalho.length === 0) return alert("O PDF final ficaria sem páginas.");
@@ -551,15 +621,14 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
       if (acao === 'extrair') {
         planoTrabalho = planoTrabalho.filter(p => p.selecionado);
         if (planoTrabalho.length === 0) return alert("Selecione as páginas que deseja extrair.");
-        
+
         const chk = container.querySelector('#check-um-por-pagina');
         if (chk && chk.checked) {
            acaoAtual = 'dividir-n';
         }
       }
 
-      const paramEl = container.querySelector('#input-param');
-      const param = paramEl ? parseFloat(paramEl.value) : null;
+      const param = obterParamAtual();
       const paramFinal = acaoAtual === 'dividir-n' && acao === 'extrair' ? 1 : param;
 
 
@@ -621,23 +690,18 @@ const FOCOS_ORGANIZAR = [
   {
     id: 'recortar_margens', nome: 'Recortar Margens',
     descricao: 'Detecte e remova margens em branco automaticamente.',
+    explicacao: 'A ferramenta analisa os pixels de uma página e descobre automaticamente onde termina o espaço em branco ao redor do conteúdo (texto, imagens, tabelas). Selecione a página que representa melhor o padrão do documento, clique em "✂️ Recortar" e o corte detectado é aplicado a ela — ou a todas as páginas selecionadas, se você marcar mais de uma antes de clicar. Use quando o PDF tiver margens grandes demais (por exemplo, de um scanner) e você quiser aproveitar melhor o espaço da página.',
     mostrarSelecao: true, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: true,
     acaoFixa: 'juntar', labelBotao: 'Salvar PDF Recortado', sufixoArquivo: '-recortado',
     paramLabel: null, paramValor: null, mostrarProximosPassos: true, acaoSessaoTexto: 'Recortou margens'
   },
   {
-    id: 'dividir_quantidade', nome: 'Dividir por Quantidade',
-    descricao: 'Divida o PDF em vários arquivos menores, a cada N páginas (use N=1 para separar cada página).',
+    id: 'dividir_pdf', nome: 'Dividir PDF',
+    descricao: 'Divida o PDF em vários arquivos menores — por quantidade de páginas ou por tamanho máximo em MB.',
     mostrarSelecao: false, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: false,
-    acaoFixa: 'dividir-n', labelBotao: 'Dividir e Baixar', sufixoArquivo: '-parte',
-    paramLabel: 'Qtd de páginas por arquivo', paramValor: 5
-  },
-  {
-    id: 'dividir_tamanho', nome: 'Dividir por Tamanho',
-    descricao: 'Divida o PDF em partes que não ultrapassem um tamanho em MB.',
-    mostrarSelecao: false, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: false,
-    acaoFixa: 'dividir-tamanho', labelBotao: 'Dividir e Baixar', sufixoArquivo: '-parte',
-    paramLabel: 'Tamanho máximo (MB)', paramValor: 10
+    mostrarEscolhaDivisao: true,
+    acaoFixa: null, labelBotao: 'Dividir e Baixar', sufixoArquivo: '-parte',
+    paramLabel: null, paramValor: null
   }
 ];
 
@@ -681,7 +745,11 @@ async function aplicarEdicoes(fileOrig, planoFinal, acao, param, aoProgredir) {
   }
 
   if (acao === 'dividir-tamanho') {
-    let maxBytes = param * 1024 * 1024;
+    // Margem de segurança de 2,5%: o Windows exibe tamanho de arquivo em unidades de 1024
+    // (MiB rotulado como "MB"), mas isso ainda deixa pouca folga perto do limite escolhido —
+    // por isso tratamos o alvo internamente como um pouco menor do que o valor digitado, sem
+    // mudar o que aparece na tela para quem está usando a ferramenta.
+    let maxBytes = param * 1024 * 1024 * 0.975;
     let startIdx = 0;
 
     while (startIdx < numTotal) {

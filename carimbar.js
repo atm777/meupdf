@@ -242,6 +242,9 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
     }
 
     container.querySelector('#btn-atualizar-prev').onclick = gerarPreview;
+    // Trocar a página de prévia é uma ação discreta e deliberada (diferente de digitar texto
+    // ou ajustar uma imagem) — atualiza sozinho, sem exigir o clique em "Atualizar Pré-visualização".
+    container.querySelector('#cr-preview-pag').addEventListener('input', gerarPreview);
 
     function lerConfiguracao() {
       if (modoAtual === 'num') {

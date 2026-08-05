@@ -201,6 +201,7 @@ PDFTools.registrar({
       <div id="as-modal-editor" class="as-modal-overlay">
         <div class="as-modal-topbar">
           <div style="font-size:16px; font-weight:bold;">Assinando Página <span id="as-modal-pagina"></span></div>
+          <div id="as-zoom-slot"></div>
           <div style="display:flex; gap:8px;">
             <button class="as-btn" id="btn-as-desfazer">Desfazer (Ctrl+Z)</button>
             <button class="as-btn" style="background:var(--cor-primaria); color:white; border-color:var(--cor-primaria);" id="btn-as-fechar">Concluir Página</button>
@@ -594,26 +595,42 @@ PDFTools.registrar({
     const cvsEditor = container.querySelector('#as-canvas');
     let itemAtivo = null;
 
+    // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página;
+    // o fator do controle de zoom multiplica em cima disso. Lupa/botões no desktop, pinça de
+    // dois dedos no celular (ver criarControleZoom em ui.js).
+    let paginaPdfAtual = null;
+    let escalaBase = 1;
+    const controleZoom = window.PDFTools.UI.criarControleZoom({
+      superficieToque: container.querySelector('#as-modal-body'),
+      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); }
+    });
+    container.querySelector('#as-zoom-slot').appendChild(controleZoom.elemento);
+
+    async function renderizarPaginaNoCanvas(fatorZoom) {
+      const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom });
+      cvsEditor.width = viewport.width; cvsEditor.height = viewport.height;
+
+      const ctx = cvsEditor.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,cvsEditor.width, cvsEditor.height);
+      await paginaPdfAtual.render({ canvasContext: ctx, viewport }).promise;
+
+      renderizarItensEditor();
+    }
+
     async function abrirEditor(index) {
       paginaAtualModal = index;
       container.querySelector('#as-modal-pagina').textContent = index + 1;
       modalEditor.style.display = 'flex';
       layer.innerHTML = '';
-      
+
       const page = await pdfDocJs.getPage(index + 1);
+      paginaPdfAtual = page;
       const viewportRef = page.getViewport({ scale: 1.0 });
       const maxWidth = window.innerWidth * 0.8;
       const maxHeight = window.innerHeight * 0.75;
-      const scale = Math.min(maxWidth/viewportRef.width, maxHeight/viewportRef.height, 1.5);
-      
-      const viewport = page.getViewport({ scale });
-      cvsEditor.width = viewport.width; cvsEditor.height = viewport.height;
-      
-      const ctx = cvsEditor.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,cvsEditor.width, cvsEditor.height);
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      
-      renderizarItensEditor();
+      escalaBase = Math.min(maxWidth/viewportRef.width, maxHeight/viewportRef.height, 1.5);
+
+      controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
     }
 
     function renderizarItensEditor() {
