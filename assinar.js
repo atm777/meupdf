@@ -42,6 +42,7 @@ PDFTools.registrar({
         
         /* Modal Assinatura Base */
         .as-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; }
+        #as-modal-desenho { z-index: 10000; }
         .as-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
         .as-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: auto; position: relative; }
         
@@ -51,6 +52,18 @@ PDFTools.registrar({
         .as-cria-aba { padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent; font-weight: bold; color: var(--texto-2); }
         .as-cria-aba.ativa { border-bottom-color: var(--cor-primaria); color: var(--cor-primaria); }
         .as-draw-canvas { border: 1px solid var(--borda); border-radius: 4px; width: 100%; height: 200px; touch-action: none; background: #fafafa; cursor: crosshair; }
+
+        /* Desenho Livre (lápis) */
+        .as-desenho-canvas { border: 1px solid var(--borda); border-radius: 4px; width: 100%; height: 260px; touch-action: none; background: #fafafa; cursor: crosshair; }
+        .as-desenho-barra { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+        .as-desenho-grupo { display: flex; align-items: center; gap: 6px; }
+        .as-desenho-grupo-label { font-size: 12px; font-weight: bold; color: var(--texto-2); margin-right: 2px; }
+        .as-lapis-tamanho { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--borda); background: var(--sup); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .as-lapis-tamanho.ativo { border-color: var(--cor-primaria); }
+        .as-lapis-tamanho span { border-radius: 50%; background: #000; display: block; }
+        .as-cor-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: 0 0 0 1px var(--borda); }
+        .as-cor-swatch.ativo { border-color: var(--cor-primaria); }
+        .as-cor-custom { width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; cursor: pointer; background: none; }
         
         /* Editor de Página */
         .as-editor-wrapper { position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; background: var(--sup); }
@@ -151,6 +164,39 @@ PDFTools.registrar({
         </div>
       </div>
 
+      <!-- Modal Desenho Livre (lápis à mão livre) -->
+      <div id="as-modal-desenho" class="as-modal-overlay">
+        <div style="flex:1; display:flex; align-items:center; justify-content:center;">
+          <div class="as-cria-painel">
+            <h3 style="margin-top:0;">Desenho Livre</h3>
+            <canvas id="as-draw-livre" class="as-desenho-canvas"></canvas>
+            <div class="as-desenho-barra">
+              <div class="as-desenho-grupo">
+                <span class="as-desenho-grupo-label">Espessura:</span>
+                <button type="button" class="as-lapis-tamanho" data-tamanho="2"><span style="width:4px; height:4px;"></span></button>
+                <button type="button" class="as-lapis-tamanho ativo" data-tamanho="5"><span style="width:8px; height:8px;"></span></button>
+                <button type="button" class="as-lapis-tamanho" data-tamanho="10"><span style="width:14px; height:14px;"></span></button>
+              </div>
+              <div class="as-desenho-grupo">
+                <span class="as-desenho-grupo-label">Cor:</span>
+                <button type="button" class="as-cor-swatch ativo" data-cor="#000000" style="background:#000000;"></button>
+                <button type="button" class="as-cor-swatch" data-cor="#ef4444" style="background:#ef4444;"></button>
+                <button type="button" class="as-cor-swatch" data-cor="#0a58ca" style="background:#0a58ca;"></button>
+                <button type="button" class="as-cor-swatch" data-cor="#10b981" style="background:#10b981;"></button>
+                <button type="button" class="as-cor-swatch" data-cor="#f59e0b" style="background:#f59e0b;"></button>
+                <input type="color" id="as-cor-livre-custom" class="as-cor-custom" value="#000000" title="Outra cor">
+              </div>
+              <button class="as-btn" id="btn-limpar-desenho-livre" style="margin-left:auto;">Limpar</button>
+            </div>
+            <div style="font-size:12px; color: var(--texto-2); margin-top:8px;">Desenhe com o mouse ou o dedo. Dá para arrastar e redimensionar depois de adicionar à página.</div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+              <button class="as-btn" id="btn-cancelar-desenho">Cancelar</button>
+              <button class="as-btn-acao" id="btn-salvar-desenho" style="width:auto; padding:8px 16px;">Adicionar à Página</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Modal Editor de Página -->
       <div id="as-modal-editor" class="as-modal-overlay">
         <div class="as-modal-topbar">
@@ -166,7 +212,8 @@ PDFTools.registrar({
           <button class="as-btn" id="btn-add-ass" style="text-align:left;">✒️ Assinatura Salva</button>
           <button class="as-btn" id="btn-add-data" style="text-align:left;">📅 Data de Hoje</button>
           <button class="as-btn" id="btn-add-txt" style="text-align:left;">📝 Texto Livre</button>
-          
+          <button class="as-btn" id="btn-add-desenho" style="text-align:left;">✏️ Desenho Livre</button>
+
           <hr style="border:0; border-top: 1px solid var(--borda); margin:8px 0;">
           <button class="as-btn" id="btn-aplicar-todas" style="text-align:left; color:var(--cor-primaria);">✨ Aplicar a Todas</button>
         </div>
@@ -351,6 +398,128 @@ PDFTools.registrar({
       localStorage.removeItem('assinatura_salva');
       assinaturaSalva = null;
       atualizarPainelAssinatura();
+    };
+
+    // --- DESENHO LIVRE (lápis à mão livre, para marcar/anotar a página) ---
+    const modalDesenho = container.querySelector('#as-modal-desenho');
+    const drawLivreCanvas = container.querySelector('#as-draw-livre');
+    const ctxDrawLivre = drawLivreCanvas.getContext('2d', { willReadFrequently: true });
+    let lapisTamanho = 5;
+    let lapisCor = '#000000';
+
+    function resizeDrawLivreCanvas() {
+      const rect = drawLivreCanvas.getBoundingClientRect();
+      drawLivreCanvas.width = rect.width * 2;
+      drawLivreCanvas.height = rect.height * 2;
+      ctxDrawLivre.scale(2, 2);
+      ctxDrawLivre.lineCap = 'round';
+      ctxDrawLivre.lineJoin = 'round';
+      ctxDrawLivre.lineWidth = lapisTamanho;
+      ctxDrawLivre.strokeStyle = lapisCor;
+    }
+
+    container.querySelector('#btn-add-desenho').onclick = () => {
+      modalDesenho.style.display = 'flex';
+      setTimeout(resizeDrawLivreCanvas, 50);
+    };
+    container.querySelector('#btn-cancelar-desenho').onclick = () => { modalDesenho.style.display = 'none'; };
+
+    container.querySelectorAll('.as-lapis-tamanho').forEach(btn => {
+      btn.onclick = () => {
+        container.querySelectorAll('.as-lapis-tamanho').forEach(b => b.classList.remove('ativo'));
+        btn.classList.add('ativo');
+        lapisTamanho = parseInt(btn.dataset.tamanho);
+        ctxDrawLivre.lineWidth = lapisTamanho;
+      };
+    });
+
+    function selecionarCorLivre(cor) {
+      lapisCor = cor;
+      ctxDrawLivre.strokeStyle = lapisCor;
+      container.querySelectorAll('.as-cor-swatch').forEach(b => b.classList.toggle('ativo', b.dataset.cor === cor));
+    }
+    container.querySelectorAll('.as-cor-swatch').forEach(btn => {
+      btn.onclick = () => selecionarCorLivre(btn.dataset.cor);
+    });
+    container.querySelector('#as-cor-livre-custom').oninput = (e) => {
+      container.querySelectorAll('.as-cor-swatch').forEach(b => b.classList.remove('ativo'));
+      lapisCor = e.target.value;
+      ctxDrawLivre.strokeStyle = lapisCor;
+    };
+
+    let isDrawingLivre = false, lastLX = 0, lastLY = 0;
+    function getDrawLivrePos(e) {
+      const rect = drawLivreCanvas.getBoundingClientRect();
+      let cx = e.clientX, cy = e.clientY;
+      if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+      return { x: cx - rect.left, y: cy - rect.top };
+    }
+    function startDrawLivre(e) {
+      e.preventDefault(); isDrawingLivre = true;
+      const p = getDrawLivrePos(e); lastLX = p.x; lastLY = p.y;
+      ctxDrawLivre.beginPath(); ctxDrawLivre.moveTo(lastLX, lastLY);
+    }
+    function moveDrawLivre(e) {
+      if (!isDrawingLivre) return;
+      e.preventDefault(); const p = getDrawLivrePos(e);
+      const xc = (lastLX + p.x) / 2; const yc = (lastLY + p.y) / 2;
+      ctxDrawLivre.quadraticCurveTo(lastLX, lastLY, xc, yc); ctxDrawLivre.stroke();
+      lastLX = p.x; lastLY = p.y;
+    }
+    function stopDrawLivre() { isDrawingLivre = false; }
+
+    drawLivreCanvas.addEventListener('mousedown', startDrawLivre);
+    drawLivreCanvas.addEventListener('mousemove', moveDrawLivre);
+    drawLivreCanvas.addEventListener('mouseup', stopDrawLivre);
+    drawLivreCanvas.addEventListener('mouseleave', stopDrawLivre);
+    drawLivreCanvas.addEventListener('touchstart', startDrawLivre, {passive:false});
+    drawLivreCanvas.addEventListener('touchmove', moveDrawLivre, {passive:false});
+    drawLivreCanvas.addEventListener('touchend', stopDrawLivre);
+
+    container.querySelector('#btn-limpar-desenho-livre').onclick = () => {
+      ctxDrawLivre.clearRect(0, 0, drawLivreCanvas.width, drawLivreCanvas.height);
+    };
+
+    container.querySelector('#btn-salvar-desenho').onclick = () => {
+      // Auto crop nas bordas transparentes, igual à criação de assinatura
+      const w = drawLivreCanvas.width, h = drawLivreCanvas.height;
+      if (w === 0) return;
+      const d = ctxDrawLivre.getImageData(0, 0, w, h).data;
+      let minX = w, minY = h, maxX = 0, maxY = 0;
+      let hasPixels = false;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if (d[(y * w + x) * 4 + 3] > 10) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            hasPixels = true;
+          }
+        }
+      }
+
+      if (!hasPixels) return alert('Desenhe algo antes de adicionar à página.');
+
+      const pad = 10;
+      minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+      maxX = Math.min(w, maxX + pad); maxY = Math.min(h, maxY + pad);
+
+      const cropCvs = document.createElement('canvas');
+      cropCvs.width = maxX - minX; cropCvs.height = maxY - minY;
+      cropCvs.getContext('2d').putImageData(ctxDrawLivre.getImageData(minX, minY, cropCvs.width, cropCvs.height), 0, 0);
+
+      const dataUrl = cropCvs.toDataURL('image/png');
+      const ratio = cropCvs.height / cropCvs.width;
+      const wFrac = 0.3;
+
+      salvarEstado();
+      assinaturas[paginaAtualModal].push({ tipo: 'img', val: dataUrl, x: 0.35, y: 0.4, w: wFrac, h: wFrac * ratio });
+      renderizarItensEditor();
+
+      modalDesenho.style.display = 'none';
+      ctxDrawLivre.clearRect(0, 0, drawLivreCanvas.width, drawLivreCanvas.height);
     };
 
     // --- LEITURA DO ARQUIVO ---
