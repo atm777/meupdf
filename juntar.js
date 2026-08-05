@@ -3,8 +3,8 @@ PDFTools.registrar({
   nome: 'Juntar PDFs',
   descricao: 'Combine vários arquivos em um só. Preserve a ordem e mantenha a qualidade original.',
   precisa: ['pdf-lib'],
-  montarUI: function(container) {
-    let itens = []; 
+  montarUI: function(container, arquivoInicial) {
+    let itens = [];
     
     if (!document.getElementById('css-juntar-pdf')) {
       const style = document.createElement('style');
@@ -48,52 +48,54 @@ PDFTools.registrar({
     grid.appendChild(colEsq);
     grid.appendChild(colDir);
 
+    async function processarNovosArquivos(arquivos) {
+      let ignorados = 0;
+      let aceitos = [];
+      for (const file of arquivos) {
+        if (await PDFTools.ehPDF(file)) {
+          aceitos.push(file);
+        } else {
+          ignorados++;
+        }
+      }
+
+      if (ignorados > 0) {
+        PDFTools.UI.mostrarToast(`${ignorados} arquivo(s) ignorado(s) por não serem PDFs válidos.`, 'erro');
+      }
+
+      if (aceitos.length > 0) {
+        await PDFTools.carregarLib('pdf-lib');
+
+        aceitos.forEach(file => {
+          const item = {
+            id: Math.random().toString(36).substring(2, 9),
+            file: file,
+            numPages: null,
+            carregando: true
+          };
+          itens.push(item);
+
+          // Carregar contagem de páginas em background
+          PDFTools.lerComoArrayBuffer(file).then(buf => {
+            return window.PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+          }).then(doc => {
+            item.numPages = doc.getPageCount();
+            item.carregando = false;
+            renderLista();
+          }).catch(e => {
+            item.numPages = '?';
+            item.carregando = false;
+            renderLista();
+          });
+        });
+        renderLista();
+      }
+    }
+
     const areaDrop = PDFTools.UI.criarDropzone({
       multiplo: true,
       aceita: '.pdf, application/pdf',
-      onArquivos: async (arquivos) => {
-        let ignorados = 0;
-        let aceitos = [];
-        for (const file of arquivos) {
-          if (await PDFTools.ehPDF(file)) {
-            aceitos.push(file);
-          } else {
-            ignorados++;
-          }
-        }
-        
-        if (ignorados > 0) {
-          PDFTools.UI.mostrarToast(`${ignorados} arquivo(s) ignorado(s) por não serem PDFs válidos.`, 'erro');
-        }
-
-        if (aceitos.length > 0) {
-          await PDFTools.carregarLib('pdf-lib');
-          
-          aceitos.forEach(file => {
-            const item = {
-              id: Math.random().toString(36).substring(2, 9),
-              file: file,
-              numPages: null,
-              carregando: true
-            };
-            itens.push(item);
-            
-            // Carregar contagem de páginas em background
-            PDFTools.lerComoArrayBuffer(file).then(buf => {
-              return window.PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
-            }).then(doc => {
-              item.numPages = doc.getPageCount();
-              item.carregando = false;
-              renderLista();
-            }).catch(e => {
-              item.numPages = '?';
-              item.carregando = false;
-              renderLista();
-            });
-          });
-          renderLista();
-        }
-      }
+      onArquivos: processarNovosArquivos
     });
     colEsq.appendChild(areaDrop);
 
@@ -206,8 +208,16 @@ PDFTools.registrar({
         
         const btnBaixar = areaResultado.querySelector('button');
         btnBaixar.onclick = () => PDFTools.baixar(resultado.blob, nomeFinal);
-        
+
         btnBaixar.click();
+
+        const proxSlot = areaResultado.querySelector('.prox-passos-slot');
+        proxSlot.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob: resultado.blob, nomeArquivo: nomeFinal, origemId: 'juntar_pdfs', tamanhoBytes: resultado.blob.size
+        });
+        if (prox) proxSlot.appendChild(prox);
+        PDFTools.registrarAcaoSessao('Juntou os PDFs');
 
       } catch (err) {
         console.error(err);
@@ -233,6 +243,7 @@ PDFTools.registrar({
       <div style="font-size:14px; margin-bottom:4px;">Tamanho final: <strong class="res-tamanho"></strong></div>
       <div style="font-size:14px; margin-bottom:12px;">Total de páginas: <strong class="res-paginas"></strong></div>
       <button class="pdf-btn-principal" style="min-height:40px; margin-top:0;">Baixar Novamente</button>
+      <div class="prox-passos-slot"></div>
     `;
     colDir.appendChild(areaResultado);
 
@@ -331,6 +342,8 @@ PDFTools.registrar({
         renderLista();
       }
     }
+
+    if (arquivoInicial) processarNovosArquivos([arquivoInicial]);
   }
 });
 

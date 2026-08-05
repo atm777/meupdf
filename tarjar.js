@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'Tarjar Documento',
   descricao: 'Censure dados sensíveis com segurança absoluta. O texto é destruído e substituído por pixels irreversíveis.',
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
     let numPages = 0;
@@ -75,6 +75,11 @@ PDFTools.registrar({
             </label>
             <button class="tj-btn-acao" id="btn-gerar">Gerar PDF Protegido</button>
             <div id="tj-progresso-container" style="margin-top:16px;"></div>
+            <div id="tj-resultado" style="display:none; margin-top:16px;">
+              <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
+              <button id="btn-tj-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
+              <div id="tj-proximos-passos" style="margin-top:16px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -365,6 +370,17 @@ PDFTools.registrar({
         const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-tarjado.pdf';
         PDFTools.baixar(blob, nome);
 
+        const resArea = container.querySelector('#tj-resultado');
+        resArea.style.display = 'block';
+        container.querySelector('#btn-tj-baixar-novamente').onclick = () => PDFTools.baixar(blob, nome);
+        const proxContainer = container.querySelector('#tj-proximos-passos');
+        proxContainer.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob, nomeArquivo: nome, origemId: 'tarjar_pdf', tamanhoBytes: blob.size
+        });
+        if (prox) proxContainer.appendChild(prox);
+        PDFTools.registrarAcaoSessao('Tarjou o documento');
+
       } catch (err) {
         console.error(err);
         PDFTools.UI.mostrarToast('Erro: ' + err.message, 'erro');
@@ -373,6 +389,8 @@ PDFTools.registrar({
         btn.disabled = false;
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });
 

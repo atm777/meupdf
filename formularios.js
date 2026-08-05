@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'Preencher Formulário',
   descricao: 'Preencha PDFs interativos (AcroForm) ou digite livremente por cima de qualquer documento.',
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let arqBuffer = null;
     let pdfDocJs = null;
@@ -101,6 +101,11 @@ PDFTools.registrar({
 
             <button class="fm-btn-acao" id="btn-gerar">Salvar Documento</button>
             <div id="fm-progresso" style="margin-top:16px;"></div>
+            <div id="fm-resultado" style="display:none; margin-top:16px;">
+              <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
+              <button id="btn-fm-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
+              <div id="fm-proximos-passos" style="margin-top:16px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -456,9 +461,21 @@ PDFTools.registrar({
         
         const bytes = await pdfDocLib.save();
         const blob = new Blob([bytes], { type: 'application/pdf' });
-        PDFTools.baixar(blob, PDFTools.nomeSemExtensao(fileOrig.name) + '-preenchido.pdf');
+        const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-preenchido.pdf';
+        PDFTools.baixar(blob, nome);
         PDFTools.UI.mostrarToast('Formulário salvo com sucesso!', 'sucesso');
-        
+
+        const resArea = container.querySelector('#fm-resultado');
+        resArea.style.display = 'block';
+        container.querySelector('#btn-fm-baixar-novamente').onclick = () => PDFTools.baixar(blob, nome);
+        const proxContainer = container.querySelector('#fm-proximos-passos');
+        proxContainer.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob, nomeArquivo: nome, origemId: 'preencher_form', tamanhoBytes: blob.size
+        });
+        if (prox) proxContainer.appendChild(prox);
+        PDFTools.registrarAcaoSessao('Preencheu o formulário');
+
       } catch (err) {
         console.error(err);
         PDFTools.UI.mostrarToast('Erro: ' + err.message, 'erro');
@@ -467,6 +484,8 @@ PDFTools.registrar({
         btn.disabled = false;
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });
 

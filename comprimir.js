@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'Comprimir PDF',
   descricao: 'Reduza o tamanho do arquivo informando o limite máximo que você precisa.',
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let arqBuffer = null;
     
@@ -101,6 +101,7 @@ PDFTools.registrar({
             <div id="comp-preview" style="background: var(--sup); box-shadow:0 1px 3px rgba(0,0,0,0.2); flex-grow:1; display:flex; align-items:center; justify-content:center; overflow:hidden;"></div>
           </div>
         </div>
+        <div id="comp-proximos-passos"></div>
       </div>
     `;
 
@@ -243,24 +244,37 @@ PDFTools.registrar({
         const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-comprimido.pdf';
         btnBaixar.onclick = () => PDFTools.baixar(result.blob, nome);
 
-        // Preview da primeira página do resultado
+        const proxContainer = container.querySelector('#comp-proximos-passos');
+        proxContainer.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob: result.blob, nomeArquivo: nome, origemId: 'comprimir_pdf', tamanhoBytes: result.blob.size
+        });
+        if (prox) proxContainer.appendChild(prox);
+        PDFTools.registrarAcaoSessao('Comprimiu o PDF');
+
+        // Preview da primeira página do resultado - numa etapa isolada: se a pré-visualização
+        // falhar (arquivo atípico, etc.), o resultado e o "E agora?" acima já ficaram de pé.
         const previewDiv = container.querySelector('#comp-preview');
         previewDiv.innerHTML = '<span style="color:#999; font-size:12px;">Carregando...</span>';
-        
-        const resBuffer = await result.blob.arrayBuffer();
-        const docJs = await window.pdfjsLib.getDocument({ data: resBuffer }).promise;
-        const page = await docJs.getPage(1);
-        const viewport = page.getViewport({ scale: 0.5 });
-        const canvas = document.createElement('canvas');
-        canvas.style.maxWidth = '100%';
-        canvas.style.maxHeight = '100%';
-        canvas.style.objectFit = 'contain';
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        
-        previewDiv.innerHTML = '';
-        previewDiv.appendChild(canvas);
+        try {
+          const resBuffer = await result.blob.arrayBuffer();
+          const docJs = await window.pdfjsLib.getDocument({ data: resBuffer }).promise;
+          const page = await docJs.getPage(1);
+          const viewport = page.getViewport({ scale: 0.5 });
+          const canvas = document.createElement('canvas');
+          canvas.style.maxWidth = '100%';
+          canvas.style.maxHeight = '100%';
+          canvas.style.objectFit = 'contain';
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+          previewDiv.innerHTML = '';
+          previewDiv.appendChild(canvas);
+        } catch (previewErr) {
+          console.error(previewErr);
+          previewDiv.innerHTML = '<span style="color:var(--cor-erro); font-size:12px;">Não foi possível gerar a pré-visualização.</span>';
+        }
 
       } catch (err) {
         console.error(err);
@@ -270,6 +284,8 @@ PDFTools.registrar({
         btn.disabled = false;
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });
 

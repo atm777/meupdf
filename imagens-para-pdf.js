@@ -3,8 +3,10 @@ PDFTools.registrar({
   nome: 'Imagens para PDF',
   descricao: 'Transforme fotos e imagens em um único arquivo PDF. Ordenação fácil e redução inteligente de tamanho.',
   precisa: ['pdf-lib'],
-  montarUI: function(container) {
-    let itens = []; 
+  montarUI: function(container, arquivoInicial) {
+    // arquivoInicial não se aplica aqui: esta ferramenta consome imagens, não PDFs, e nunca
+    // é sugerida como próximo passo encadeado. Parâmetro mantido só por consistência de contrato.
+    let itens = [];
     
     if (!document.getElementById('css-imagens-pdf')) {
       const style = document.createElement('style');
@@ -173,8 +175,16 @@ PDFTools.registrar({
         
         const btnBaixar = areaResultado.querySelector('button');
         btnBaixar.onclick = () => PDFTools.baixar(resultado.blob, nomeFinal);
-        
+
         btnBaixar.click(); // Auto-baixar
+
+        const proxSlot = areaResultado.querySelector('.prox-passos-slot');
+        proxSlot.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob: resultado.blob, nomeArquivo: nomeFinal, origemId: 'imagens_para_pdf', tamanhoBytes: resultado.blob.size
+        });
+        if (prox) proxSlot.appendChild(prox);
+        PDFTools.registrarAcaoSessao('Gerou o PDF a partir de imagens');
 
       } catch (err) {
         console.error(err);
@@ -193,6 +203,7 @@ PDFTools.registrar({
       <p>PDF Pronto!</p>
       <div style="font-size:14px; margin-bottom:12px;">Tamanho final: <strong class="res-tamanho"></strong></div>
       <button class="pdf-btn-principal" style="min-height:40px; margin-top:0;">Baixar Novamente</button>
+      <div class="prox-passos-slot"></div>
     `;
     colDir.appendChild(areaResultado);
 

@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'Extrair Texto (TXT/MD)',
   descricao: 'Extraia todo o texto das páginas para copiar ou salvar como arquivo.',
   precisa: ['pdfjs'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
     let numPages = 0;
@@ -286,5 +286,7 @@ PDFTools.registrar({
         btn.disabled = false;
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });

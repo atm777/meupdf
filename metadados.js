@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'Editar Metadados',
   descricao: 'Limpe ou altere informações ocultas do PDF, como autor e data de criação.',
   precisa: ['pdf-lib'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let pdfDoc = null;
     let arqBuffer = null;
@@ -67,6 +67,11 @@ PDFTools.registrar({
             <hr style="border:0; border-top:1px solid var(--borda); margin:16px 0;">
             <button id="btn-md-salvar" class="md-btn-acao md-btn-salvar">Salvar Alterações</button>
             <div id="md-progresso" style="margin-top:16px;"></div>
+            <div id="md-resultado" style="display:none; margin-top:16px;">
+              <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
+              <button id="btn-md-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
+              <div id="md-proximos-passos" style="margin-top:16px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -154,7 +159,18 @@ PDFTools.registrar({
         const nomeFinal = PDFTools.nomeSemExtensao(fileOrig.name) + (isLimpeza ? '-limpo.pdf' : '-meta.pdf');
         PDFTools.baixar(blob, nomeFinal);
         PDFTools.UI.mostrarToast('Metadados atualizados com sucesso!', 'sucesso');
-        
+
+        const resArea = container.querySelector('#md-resultado');
+        resArea.style.display = 'block';
+        container.querySelector('#btn-md-baixar-novamente').onclick = () => PDFTools.baixar(blob, nomeFinal);
+        const proxContainer = container.querySelector('#md-proximos-passos');
+        proxContainer.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob, nomeArquivo: nomeFinal, origemId: 'editar_metadados', tamanhoBytes: blob.size
+        });
+        if (prox) proxContainer.appendChild(prox);
+        PDFTools.registrarAcaoSessao(isLimpeza ? 'Limpou os metadados' : 'Editou os metadados');
+
       } catch(e) {
         console.error(e);
         PDFTools.UI.mostrarToast('Erro ao salvar.', 'erro');
@@ -162,5 +178,7 @@ PDFTools.registrar({
         progresso.esconder();
       }
     }
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });

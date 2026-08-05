@@ -2,7 +2,7 @@
 // Registrado como várias ferramentas separadas mais abaixo (Girar, Remover, Extrair,
 // Reordenar, Recortar Margens, Dividir por Quantidade, Dividir por Tamanho), cada uma com
 // seu próprio botão na tela inicial — em vez de um único "Organizar Páginas" com tudo junto.
-function montarOrganizarUI(container, foco) {
+function montarOrganizarUI(container, foco, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
     let plano = []; // Estado atual: [{ id, originalIndex, rotation, cropBox, selecionado }]
@@ -125,6 +125,11 @@ function montarOrganizarUI(container, foco) {
             ${boxZipHTML}
             <button class="org-btn-acao" id="btn-gerar" style="width:100%;">${foco.labelBotao}</button>
             <div id="org-progresso-container" style="margin-top:16px;"></div>
+            <div id="org-resultado" style="display:none; margin-top:16px;">
+              <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
+              <button id="btn-org-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
+              <div id="org-proximos-passos" style="margin-top:16px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -568,8 +573,22 @@ function montarOrganizarUI(container, foco) {
         const usarZip = radioZipOut && radioZipOut.checked && partes.length > 1;
 
         if (partes.length === 1) {
-          PDFTools.baixar(partes[0], `${nomeOriginal}${foco.sufixoArquivo}.pdf`);
+          const nomeFinal = `${nomeOriginal}${foco.sufixoArquivo}.pdf`;
+          PDFTools.baixar(partes[0], nomeFinal);
           PDFTools.UI.mostrarToast('Documento gerado com sucesso!', 'sucesso');
+
+          if (foco.mostrarProximosPassos) {
+            const resArea = container.querySelector('#org-resultado');
+            resArea.style.display = 'block';
+            container.querySelector('#btn-org-baixar-novamente').onclick = () => PDFTools.baixar(partes[0], nomeFinal);
+            const proxContainer = container.querySelector('#org-proximos-passos');
+            proxContainer.innerHTML = '';
+            const prox = PDFTools.UI.criarProximosPassos({
+              blob: partes[0], nomeArquivo: nomeFinal, origemId: foco.id, tamanhoBytes: partes[0].size
+            });
+            if (prox) proxContainer.appendChild(prox);
+            PDFTools.registrarAcaoSessao(foco.acaoSessaoTexto || foco.nome);
+          }
         } else if (usarZip) {
           progresso.atualizar(95, 'Montando arquivo ZIP...');
           await new Promise(r => setTimeout(r, 50));
@@ -592,45 +611,19 @@ function montarOrganizarUI(container, foco) {
         btnGerar.disabled = false;
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
 }
 
 // --- REGISTRO: um botão por tarefa humana, todos usando o mesmo motor acima ---
 
 const FOCOS_ORGANIZAR = [
   {
-    id: 'girar_paginas', nome: 'Girar Páginas',
-    descricao: 'Gire uma ou mais páginas do PDF para a orientação correta.',
-    mostrarSelecao: true, mostrarGirar: true, mostrarRemover: false, mostrarRecortar: false,
-    acaoFixa: 'juntar', labelBotao: 'Salvar PDF Girado', sufixoArquivo: '-girado',
-    paramLabel: null, paramValor: null
-  },
-  {
-    id: 'remover_paginas', nome: 'Remover Páginas',
-    descricao: 'Selecione e apague páginas indesejadas do seu PDF.',
-    mostrarSelecao: true, mostrarGirar: false, mostrarRemover: true, mostrarRecortar: false,
-    acaoFixa: 'juntar', labelBotao: 'Salvar PDF sem essas Páginas', sufixoArquivo: '-sem-paginas',
-    paramLabel: null, paramValor: null
-  },
-  {
-    id: 'extrair_paginas', nome: 'Extrair Páginas',
-    descricao: 'Selecione páginas específicas e gere um novo PDF só com elas.',
-    mostrarSelecao: true, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: false,
-    acaoFixa: 'extrair', labelBotao: 'Extrair e Baixar', sufixoArquivo: '-extraido',
-    paramLabel: null, paramValor: null, mostrarCheckUmPorPagina: true
-  },
-  {
-    id: 'reordenar_paginas', nome: 'Reordenar Páginas',
-    descricao: 'Arraste as páginas para mudar a ordem do documento.',
-    mostrarSelecao: false, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: false,
-    acaoFixa: 'juntar', labelBotao: 'Salvar Nova Ordem', sufixoArquivo: '-reordenado',
-    paramLabel: null, paramValor: null
-  },
-  {
     id: 'recortar_margens', nome: 'Recortar Margens',
     descricao: 'Detecte e remova margens em branco automaticamente.',
     mostrarSelecao: true, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: true,
     acaoFixa: 'juntar', labelBotao: 'Salvar PDF Recortado', sufixoArquivo: '-recortado',
-    paramLabel: null, paramValor: null
+    paramLabel: null, paramValor: null, mostrarProximosPassos: true, acaoSessaoTexto: 'Recortou margens'
   },
   {
     id: 'dividir_quantidade', nome: 'Dividir por Quantidade',
@@ -654,7 +647,7 @@ FOCOS_ORGANIZAR.forEach(foco => {
     nome: foco.nome,
     descricao: foco.descricao,
     precisa: ['pdf-lib', 'pdfjs'],
-    montarUI: (container) => montarOrganizarUI(container, foco)
+    montarUI: (container, arquivoInicial) => montarOrganizarUI(container, foco, arquivoInicial)
   });
 });
 

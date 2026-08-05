@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'PDF para Imagens',
   descricao: 'Transforme páginas em arquivos JPG ou PNG para enviar no WhatsApp, redes sociais ou gráficas.',
   precisa: ['pdfjs'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
     let numPages = 0;
@@ -445,5 +445,7 @@ PDFTools.registrar({
         btn.disabled = false;
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });

@@ -1,6 +1,6 @@
 // Motor compartilhado: monta a UI de carimbo já focada em UMA tarefa (numerar OU marca d'água).
 // Registrado como duas ferramentas separadas mais abaixo, cada uma com seu próprio botão.
-function montarCarimboUI(container, modoFixo) {
+function montarCarimboUI(container, modoFixo, arquivoInicial) {
     let fileOrig = null;
     let arqBuffer = null;
     let pdfDocJs = null;
@@ -130,6 +130,11 @@ function montarCarimboUI(container, modoFixo) {
             <hr style="border:0; border-top: 1px solid var(--borda); margin:16px 0;">
             <button id="btn-gerar" class="cr-btn-acao">Gerar PDF</button>
             <div id="cr-progresso" style="margin-top:16px;"></div>
+            <div id="cr-resultado" style="display:none; margin-top:16px;">
+              <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
+              <button id="btn-cr-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
+              <div id="cr-proximos-passos" style="margin-top:16px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -317,8 +322,19 @@ function montarCarimboUI(container, modoFixo) {
         const blob = new Blob([bytes], { type: 'application/pdf' });
         
         const sufixo = modoAtual === 'num' ? '-numerado.pdf' : '-marca-dagua.pdf';
-        PDFTools.baixar(blob, PDFTools.nomeSemExtensao(fileOrig.name) + sufixo);
+        const nome = PDFTools.nomeSemExtensao(fileOrig.name) + sufixo;
+        PDFTools.baixar(blob, nome);
         PDFTools.UI.mostrarToast('Concluído!', 'sucesso');
+
+        const resArea = container.querySelector('#cr-resultado');
+        resArea.style.display = 'block';
+        container.querySelector('#btn-cr-baixar-novamente').onclick = () => PDFTools.baixar(blob, nome);
+        const proxContainer = container.querySelector('#cr-proximos-passos');
+        proxContainer.innerHTML = '';
+        const origemId = modoAtual === 'num' ? 'numerar_paginas' : 'marca_dagua';
+        const prox = PDFTools.UI.criarProximosPassos({ blob, nomeArquivo: nome, origemId, tamanhoBytes: blob.size });
+        if (prox) proxContainer.appendChild(prox);
+        PDFTools.registrarAcaoSessao(modoAtual === 'num' ? 'Numerou as páginas' : "Adicionou marca d'água");
       } catch(e) {
          console.error(e);
          PDFTools.UI.mostrarToast('Erro: ' + e.message, 'erro');
@@ -327,6 +343,8 @@ function montarCarimboUI(container, modoFixo) {
          progresso.esconder();
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
 }
 
 PDFTools.registrar({
@@ -334,7 +352,7 @@ PDFTools.registrar({
   nome: 'Numerar Páginas',
   descricao: 'Adicione numeração de páginas em rodapé ou cabeçalho, em qualquer formato.',
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: (container) => montarCarimboUI(container, 'num')
+  montarUI: (container, arquivoInicial) => montarCarimboUI(container, 'num', arquivoInicial)
 });
 
 PDFTools.registrar({
@@ -342,7 +360,7 @@ PDFTools.registrar({
   nome: "Marca d'Água",
   descricao: "Adicione um carimbo de texto (ex: CONFIDENCIAL) ou uma imagem (logo em PNG/JPG) sobre todas as páginas.",
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: (container) => montarCarimboUI(container, 'marca')
+  montarUI: (container, arquivoInicial) => montarCarimboUI(container, 'marca', arquivoInicial)
 });
 
 // Hex to {r,g,b} 0-1

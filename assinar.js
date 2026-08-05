@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'Assinar e Preencher',
   descricao: 'Assine documentos, adicione data e nome sem enviar seu arquivo para nenhum servidor.',
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
     let numPages = 0;
@@ -104,6 +104,11 @@ PDFTools.registrar({
             <h3 style="margin-top:0; border-bottom: 1px solid var(--borda); padding-bottom:8px;">Exportar</h3>
             <button class="as-btn-acao" id="btn-gerar">Gerar PDF Assinado</button>
             <div id="as-progresso-container" style="margin-top:16px;"></div>
+            <div id="as-resultado" style="display:none; margin-top:16px;">
+              <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
+              <button id="btn-as-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
+              <div id="as-proximos-passos" style="margin-top:16px;"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -609,8 +614,20 @@ PDFTools.registrar({
         
         const blob = await assinarLote(fileOrig, assinaturas, (pct, txt) => progresso.atualizar(pct, txt));
         PDFTools.UI.mostrarToast('Documento assinado com sucesso!', 'sucesso');
-        PDFTools.baixar(blob, PDFTools.nomeSemExtensao(fileOrig.name) + '-assinado.pdf');
-        
+        const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-assinado.pdf';
+        PDFTools.baixar(blob, nome);
+
+        const resArea = container.querySelector('#as-resultado');
+        resArea.style.display = 'block';
+        container.querySelector('#btn-as-baixar-novamente').onclick = () => PDFTools.baixar(blob, nome);
+        const proxContainer = container.querySelector('#as-proximos-passos');
+        proxContainer.innerHTML = '';
+        const prox = PDFTools.UI.criarProximosPassos({
+          blob, nomeArquivo: nome, origemId: 'assinar_pdf', tamanhoBytes: blob.size
+        });
+        if (prox) proxContainer.appendChild(prox);
+        PDFTools.registrarAcaoSessao('Assinou o documento');
+
       } catch (err) {
         console.error(err);
         PDFTools.UI.mostrarToast('Erro: ' + err.message, 'erro');
@@ -619,6 +636,8 @@ PDFTools.registrar({
         btn.disabled = false;
       }
     };
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });
 

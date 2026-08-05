@@ -3,7 +3,7 @@ PDFTools.registrar({
   nome: 'Inspecionar Privacidade',
   descricao: 'Descubra os rastros invisíveis e metadados que este PDF revela sobre você.',
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: function(container) {
+  montarUI: function(container, arquivoInicial) {
     let fileOrig = null;
     let arqBuffer = null;
     let pdfDocJs = null;
@@ -256,5 +256,7 @@ PDFTools.registrar({
         else container.querySelector('#ip-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido', e.message);
       }
     }
+
+    if (arquivoInicial) abrirArquivo(arquivoInicial);
   }
 });
