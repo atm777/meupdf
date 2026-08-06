@@ -694,6 +694,8 @@ function montarEstudioUI(container, arquivoInicial) {
       el.style.background = marcaCorAtual;
       el.style.left = (p.x * cvsEditor.width) + 'px';
       el.style.top = (p.y * cvsEditor.height) + 'px';
+      el.style.width = '0px';
+      el.style.height = '0px';
       layer.appendChild(el);
       marcaEmAndamento = { elemento: el, startXFrac: p.x, startYFrac: p.y };
     }
@@ -722,7 +724,10 @@ function montarEstudioUI(container, arquivoInicial) {
       el.remove();
       marcaEmAndamento = null;
 
-      if (wFrac < 0.01) return; // arrasto irrelevante (praticamente só um clique), ignora
+      // "!(wFrac >= 0.01)" (em vez de "wFrac < 0.01") também barra NaN — comparação com NaN é
+      // sempre falsa, então um "<" comum deixaria passar um item quebrado (width/height nunca
+      // definidos porque nenhum mousemove rodou entre o mousedown e o mouseup).
+      if (!(wFrac >= 0.01) || !isFinite(xFrac) || !isFinite(yFrac)) return; // arrasto irrelevante ou inválido, ignora
 
       // Um arrasto quase só horizontal (a pessoa "passando o marcador" numa linha) ganha uma
       // altura mínima equivalente a uma linha de texto comum — senão o grifo fica fino demais
