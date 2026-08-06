@@ -50,6 +50,8 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-item-arrastavel { position: absolute; border: 1px dashed transparent; cursor: move; pointer-events: auto; }
         .est-item-arrastavel:hover, .est-item-arrastavel.ativo { border-color: var(--cor-primaria); background: rgba(0, 123, 255, 0.05); }
         .est-item-arrastavel .txt { width: 100%; height: 100%; overflow: hidden; white-space: pre; pointer-events: none; }
+        .est-item-arrastavel .marca-fill { width: 100%; height: 100%; opacity: 0.4; pointer-events: none; }
+        .est-marca-temp { position: absolute; opacity: 0.4; pointer-events: none; }
 
         .est-resize-handle { position: absolute; bottom: -5px; right: -5px; width: 14px; height: 14px; background: var(--cor-primaria); border-radius: 50%; cursor: se-resize; display: none; }
         .est-item-arrastavel.ativo .est-resize-handle { display: block; }
@@ -88,8 +90,9 @@ function montarEstudioUI(container, arquivoInicial) {
       <div id="est-tela-trabalho" style="display:none;">
         <div class="est-aviso">
           <strong>O que dá pra fazer aqui:</strong> pequenas edições numa página — desenhar à mão
-          livre com o lápis (tamanhos e cores) ou incluir uma caixa de texto, clicando direto sobre
-          o conteúdo do PDF. Para reorganizar, girar ou remover páginas, apagar informações
+          livre com o lápis (tamanhos e cores), incluir uma caixa de texto ou grifar com marca
+          texto (clicar e arrastar sobre o conteúdo, sem esconder o que está embaixo), tudo direto
+          sobre o conteúdo do PDF. Para reorganizar, girar ou remover páginas, apagar informações
           sensíveis, comprimir ou outras alterações maiores, use a ferramenta específica na barra
           do topo.
         </div>
@@ -123,6 +126,7 @@ function montarEstudioUI(container, arquivoInicial) {
             <button type="button" class="est-modo-btn ativo" data-modo="mover" title="Mover e editar itens">🖐️ Mover</button>
             <button type="button" class="est-modo-btn" data-modo="lapis" title="Desenhar à mão livre">✏️ Lápis</button>
             <button type="button" class="est-modo-btn" data-modo="texto" title="Incluir caixa de texto">📝 Texto</button>
+            <button type="button" class="est-modo-btn" data-modo="marca" title="Marcar texto (grifar)">🖍️ Marca</button>
           </div>
 
           <div class="est-sub-painel" id="est-painel-lapis" style="display:none;">
@@ -169,6 +173,16 @@ function montarEstudioUI(container, arquivoInicial) {
               <input type="color" id="est-texto-cor-custom" class="est-cor-custom" value="#000000" title="Outra cor">
             </div>
             <div style="font-size:11px; color:var(--texto-2); margin-top:8px;">Clique na página pra incluir texto. Duplo clique num texto (modo Mover) pra editar.</div>
+          </div>
+
+          <div class="est-sub-painel" id="est-painel-marca" style="display:none;">
+            <div class="est-desenho-grupo">
+              <span class="est-desenho-grupo-label">Cor:</span>
+              <button type="button" class="est-cor-swatch ativo" data-cor="#ffeb3b" style="background:#ffeb3b;" title="Amarelo"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#76ff03" style="background:#76ff03;" title="Verde fluorescente"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#ff4081" style="background:#ff4081;" title="Rosa"></button>
+            </div>
+            <div style="font-size:11px; color:var(--texto-2); margin-top:8px;">Clique e arraste sobre o texto — fica um grifo translúcido, sem esconder o que está embaixo.</div>
           </div>
 
           <hr style="border:0; border-top: 1px solid var(--borda); margin:8px 0;">
@@ -290,6 +304,10 @@ function montarEstudioUI(container, arquivoInicial) {
     let fonteNegrito = false;
     let fonteItalico = false;
 
+    // Marca texto (grifo translúcido)
+    let marcaCorAtual = '#ffeb3b';
+    let marcaEmAndamento = null; // { elemento, startXFrac, startYFrac }
+
     // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página (ou ao
     // entrar/sair da tela cheia); o fator do controle de zoom multiplica em cima disso. Lupa/
     // botões no desktop, pinça de dois dedos no celular (ver criarControleZoom em ui.js).
@@ -356,14 +374,27 @@ function montarEstudioUI(container, arquivoInicial) {
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
     }
 
-    // --- MODO (Mover / Lápis / Texto) ---
+    // Cursores em forma de emoji (lápis/marca-texto) via SVG embutido — sem precisar de nenhum
+    // arquivo de imagem à parte. O "hotspot" (2 28) fica perto da ponta do emoji.
+    function cursorEmoji(emoji) {
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><text y='26' font-size='26'>${emoji}</text></svg>`;
+      return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 2 28, crosshair`;
+    }
+    const CURSOR_LAPIS = cursorEmoji('✏️');
+    const CURSOR_MARCA = cursorEmoji('🖍️');
+
+    // --- MODO (Mover / Lápis / Texto / Marca) ---
     function definirModo(novoModo) {
       modoAtual = novoModo;
       container.querySelectorAll('.est-modo-btn').forEach(b => b.classList.toggle('ativo', b.dataset.modo === novoModo));
       container.querySelector('#est-painel-lapis').style.display = novoModo === 'lapis' ? 'block' : 'none';
       container.querySelector('#est-painel-texto').style.display = novoModo === 'texto' ? 'block' : 'none';
+      container.querySelector('#est-painel-marca').style.display = novoModo === 'marca' ? 'block' : 'none';
       tracoCanvas.style.pointerEvents = novoModo === 'lapis' ? 'auto' : 'none';
-      wrapper.style.cursor = novoModo === 'lapis' ? 'crosshair' : (novoModo === 'texto' ? 'text' : 'default');
+      wrapper.style.cursor = novoModo === 'lapis' ? CURSOR_LAPIS
+        : novoModo === 'marca' ? CURSOR_MARCA
+        : novoModo === 'texto' ? 'text'
+        : 'default';
     }
     container.querySelectorAll('.est-modo-btn').forEach(btn => {
       btn.onclick = () => definirModo(btn.dataset.modo);
@@ -388,6 +419,15 @@ function montarEstudioUI(container, arquivoInicial) {
       lapisCor = e.target.value;
       container.querySelectorAll('#est-painel-lapis .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
     };
+
+    // --- MARCA TEXTO: grifo translúcido, cores predefinidas ---
+    container.querySelectorAll('#est-painel-marca .est-cor-swatch').forEach(btn => {
+      btn.onclick = () => {
+        marcaCorAtual = btn.dataset.cor;
+        container.querySelectorAll('#est-painel-marca .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
+        btn.classList.add('ativo');
+      };
+    });
 
     function posRelativaCanvas(e, canvas) {
       const rect = canvas.getBoundingClientRect();
@@ -636,6 +676,73 @@ function montarEstudioUI(container, arquivoInicial) {
       criarNovoItemTexto(xFrac, yFrac);
     });
 
+    // --- Clique + arrasto na página (modo Marca) cria um grifo translúcido ---
+    function posFracaoPagina(e) {
+      const rect = cvsEditor.getBoundingClientRect();
+      let cx = e.clientX, cy = e.clientY;
+      if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+      return { x: (cx - rect.left) / rect.width, y: (cy - rect.top) / rect.height };
+    }
+
+    function iniciarMarca(e) {
+      if (modoAtual !== 'marca') return;
+      if (e.target.closest('.est-texto-editando-area')) return;
+      e.preventDefault();
+      const p = posFracaoPagina(e);
+      const el = document.createElement('div');
+      el.className = 'est-marca-temp';
+      el.style.background = marcaCorAtual;
+      el.style.left = (p.x * cvsEditor.width) + 'px';
+      el.style.top = (p.y * cvsEditor.height) + 'px';
+      layer.appendChild(el);
+      marcaEmAndamento = { elemento: el, startXFrac: p.x, startYFrac: p.y };
+    }
+
+    function moverMarca(e) {
+      if (!marcaEmAndamento) return;
+      e.preventDefault();
+      const p = posFracaoPagina(e);
+      const w = cvsEditor.width, h = cvsEditor.height;
+      const x0 = marcaEmAndamento.startXFrac * w, y0 = marcaEmAndamento.startYFrac * h;
+      const x1 = Math.max(0, Math.min(p.x, 1)) * w, y1 = Math.max(0, Math.min(p.y, 1)) * h;
+      marcaEmAndamento.elemento.style.left = Math.min(x0, x1) + 'px';
+      marcaEmAndamento.elemento.style.top = Math.min(y0, y1) + 'px';
+      marcaEmAndamento.elemento.style.width = Math.abs(x1 - x0) + 'px';
+      marcaEmAndamento.elemento.style.height = Math.abs(y1 - y0) + 'px';
+    }
+
+    function finalizarMarca() {
+      if (!marcaEmAndamento) return;
+      const el = marcaEmAndamento.elemento;
+      const w = cvsEditor.width, h = cvsEditor.height;
+      const xFrac = parseFloat(el.style.left) / w;
+      const yFrac = parseFloat(el.style.top) / h;
+      const wFrac = parseFloat(el.style.width) / w;
+      let hFrac = parseFloat(el.style.height) / h;
+      el.remove();
+      marcaEmAndamento = null;
+
+      if (wFrac < 0.01) return; // arrasto irrelevante (praticamente só um clique), ignora
+
+      // Um arrasto quase só horizontal (a pessoa "passando o marcador" numa linha) ganha uma
+      // altura mínima equivalente a uma linha de texto comum — senão o grifo fica fino demais
+      // pra cobrir o texto de verdade.
+      const alturaLinhaFrac = (16 * 1.3) / visPageHeightPt;
+      if (hFrac < alturaLinhaFrac * 0.6) hFrac = alturaLinhaFrac;
+
+      salvarEstado();
+      itensTexto[paginaAtualModal].push({ tipo: 'marca', x: xFrac, y: yFrac, w: wFrac, h: hFrac, corHex: marcaCorAtual });
+      renderizarItensEditor();
+    }
+
+    wrapper.addEventListener('mousedown', iniciarMarca);
+    wrapper.addEventListener('mousemove', moverMarca);
+    wrapper.addEventListener('mouseup', finalizarMarca);
+    wrapper.addEventListener('mouseleave', finalizarMarca);
+    wrapper.addEventListener('touchstart', iniciarMarca, { passive: false });
+    wrapper.addEventListener('touchmove', moverMarca, { passive: false });
+    wrapper.addEventListener('touchend', finalizarMarca);
+
     function criarNovoItemTexto(xFrac, yFrac) {
       const linhaAlturaFrac = (fonteTamanhoPt * 1.25) / visPageHeightPt;
       const item = {
@@ -760,20 +867,27 @@ function montarEstudioUI(container, arquivoInicial) {
         el.style.width = (item.w * w) + 'px';
         el.style.height = (item.h * h) + 'px';
 
-        const txt = document.createElement('div');
-        txt.className = 'txt';
-        aplicarEstiloFonteNoElemento(txt, item, escala);
-        const font = fontes[nomeFonteVariante(item.familia, item.negrito, item.italico)];
-        const linhas = quebrarTextoEmLinhas(font, item.val, item.tamanhoPt, Math.max(item.w * visPageWidthPt, 1));
-        txt.textContent = linhas.join('\n');
-        el.appendChild(txt);
+        if (item.tipo === 'marca') {
+          const fill = document.createElement('div');
+          fill.className = 'marca-fill';
+          fill.style.background = item.corHex;
+          el.appendChild(fill);
+        } else {
+          const txt = document.createElement('div');
+          txt.className = 'txt';
+          aplicarEstiloFonteNoElemento(txt, item, escala);
+          const font = fontes[nomeFonteVariante(item.familia, item.negrito, item.italico)];
+          const linhas = quebrarTextoEmLinhas(font, item.val, item.tamanhoPt, Math.max(item.w * visPageWidthPt, 1));
+          txt.textContent = linhas.join('\n');
+          el.appendChild(txt);
+        }
 
         const resizer = document.createElement('div'); resizer.className = 'est-resize-handle'; el.appendChild(resizer);
         const del = document.createElement('div'); del.className = 'est-delete-handle'; del.textContent = '✕'; el.appendChild(del);
 
         el.onmousedown = (e) => { if (modoAtual === 'mover') startDrag(e, idx, el); };
         el.ontouchstart = (e) => { if (modoAtual === 'mover') startDrag(e, idx, el); };
-        el.ondblclick = (e) => { if (modoAtual === 'mover') { e.stopPropagation(); abrirEdicaoTexto(idx); } };
+        el.ondblclick = (e) => { if (modoAtual === 'mover' && item.tipo !== 'marca') { e.stopPropagation(); abrirEdicaoTexto(idx); } };
         resizer.onmousedown = (e) => { if (modoAtual === 'mover') startResize(e, idx, el); };
         resizer.ontouchstart = (e) => { if (modoAtual === 'mover') startResize(e, idx, el); };
         del.onclick = (e) => {
@@ -824,6 +938,12 @@ function montarEstudioUI(container, arquivoInicial) {
         el.style.top = (draggingInfo.initT + dy) + 'px';
       } else {
         el.style.width = Math.max(20, draggingInfo.initW + dx) + 'px';
+        // Marca texto também redimensiona a altura no arrasto — diferente de texto, onde a
+        // altura é sempre recalculada a partir da quebra de linha, não arrastada manualmente.
+        const item = itensTexto[paginaAtualModal][idx];
+        if (item && item.tipo === 'marca') {
+          el.style.height = Math.max(10, draggingInfo.initH + dy) + 'px';
+        }
       }
     }
 
@@ -841,7 +961,7 @@ function montarEstudioUI(container, arquivoInicial) {
       // o duplo clique (o 2º clique pode cair no instante em que a camada está sendo reconstruída).
       const semMovimento = modo === 'drag'
         ? (parseFloat(el.style.left) === draggingInfo.initL && parseFloat(el.style.top) === draggingInfo.initT)
-        : (parseFloat(el.style.width) === draggingInfo.initW);
+        : (parseFloat(el.style.width) === draggingInfo.initW && parseFloat(el.style.height) === draggingInfo.initH);
       draggingInfo = null;
       if (semMovimento) return;
 
@@ -852,16 +972,30 @@ function montarEstudioUI(container, arquivoInicial) {
       item.y = parseFloat(el.style.top) / hCvs;
       item.w = parseFloat(el.style.width) / wCvs;
 
-      if (modo === 'resize') {
+      // O re-render reconstrói o DOM do zero, então perde a seleção (.ativo) de quem tinha
+      // acabado de mover/redimensionar — reaplica pra não esconder os cabos logo depois do gesto.
+      const reselecionar = () => { const el2 = layer.children[idx]; if (el2) el2.classList.add('ativo'); };
+
+      if (modo === 'resize' && item.tipo === 'marca') {
+        item.h = parseFloat(el.style.height) / hCvs;
+        renderizarItensEditor().then(reselecionar);
+      } else if (modo === 'resize') {
         item._larguraManual = true;
-        recalcularCaixaTexto(item, false).then(renderizarItensEditor);
+        recalcularCaixaTexto(item, false).then(renderizarItensEditor).then(reselecionar);
       } else {
-        renderizarItensEditor();
+        renderizarItensEditor().then(reselecionar);
       }
     }
 
-    layer.addEventListener('mousemove', doMove); layer.addEventListener('mouseup', doEnd); layer.addEventListener('mouseleave', doEnd);
-    layer.addEventListener('touchmove', doMove, { passive: false }); layer.addEventListener('touchend', doEnd); layer.addEventListener('click', doEnd);
+    // mousemove/mouseup vão no document, não no layer: assim que o arrasto sai de cima do item
+    // pequeno (pointer-events:auto só nos itens, não no layer vazio em volta), um listener preso
+    // ao layer para de receber os eventos no meio do gesto. draggingInfo!=null já garante que só
+    // faz algo quando um arrasto está de fato em andamento.
+    document.addEventListener('mousemove', doMove);
+    document.addEventListener('mouseup', doEnd);
+    document.addEventListener('touchmove', doMove, { passive: false });
+    document.addEventListener('touchend', doEnd);
+    layer.addEventListener('click', doEnd);
 
     // --- DESFAZER ---
     function salvarEstado() {
@@ -871,8 +1005,9 @@ function montarEstudioUI(container, arquivoInicial) {
 
     container.querySelector('#btn-est-desfazer').onclick = () => {
       if (historico.length > 1) {
-        historico.pop();
-        const estado = JSON.parse(historico[historico.length - 1]);
+        // O topo da pilha é o snapshot salvo bem antes da última mudança — usa ele direto como
+        // novo estado (e remove da pilha), em vez de descartá-lo e pular pro que vem antes dele.
+        const estado = JSON.parse(historico.pop());
         tracos = estado.tracos; itensTexto = estado.itensTexto;
         idxEditando = null;
         redesenharTracos();
@@ -922,7 +1057,7 @@ function montarEstudioUI(container, arquivoInicial) {
       const totalTracos = Object.values(tracos).flat().length;
       const totalTextos = Object.values(itensTexto).flat().length;
       if (totalTracos + totalTextos === 0) {
-        return alert('Você ainda não incluiu nada no documento.\n\nComo fazer:\n1. Clique em uma das páginas.\n2. No editor que abrir, escolha "✏️ Lápis" (desenhe direto na página) ou "📝 Texto" (clique onde quer escrever).\n3. Clique em "Concluir Página" e depois em "Gerar PDF Editado".');
+        return alert('Você ainda não incluiu nada no documento.\n\nComo fazer:\n1. Clique em uma das páginas.\n2. No editor que abrir, escolha "✏️ Lápis" (desenhe direto na página), "📝 Texto" (clique onde quer escrever) ou "🖍️ Marca" (clique e arraste sobre o texto pra grifar).\n3. Clique em "Concluir Página" e depois em "Gerar PDF Editado".');
       }
 
       const btn = container.querySelector('#btn-gerar');
@@ -1043,6 +1178,37 @@ function desenharTracoNoPdf(page, traco, rawW, rawH, angulo) {
   }
 }
 
+// Grifo translúcido: em vez de confiar na convenção exata de width/height + rotate do
+// drawRectangle do pdf-lib, transforma os 4 cantos individualmente (mesmo pipeline confiável do
+// desenharTracoNoPdf) e desenha o retângulo alinhado aos eixos que já sai correto — rotações
+// múltiplas de 90° preservam o formato retangular, então isso é exato, não uma aproximação.
+function desenharMarcaNoPdf(page, item, rawW, rawH, angulo) {
+  const R = (angulo % 360 + 360) % 360;
+  const { rgb } = window.PDFLib;
+  const { width: visW, height: visH } = PDFTools.dimensoesVisuais(rawW, rawH, R);
+  const cor = hexParaRgbFracaoGlobal(item.corHex);
+
+  const visX0 = item.x * visW, visY0 = item.y * visH;
+  const visX1 = visX0 + item.w * visW, visY1 = visY0 + item.h * visH;
+
+  const cantos = [
+    PDFTools.posicaoRotacionada(visX0, visY0, 0, 0, rawW, rawH, R),
+    PDFTools.posicaoRotacionada(visX1, visY0, 0, 0, rawW, rawH, R),
+    PDFTools.posicaoRotacionada(visX0, visY1, 0, 0, rawW, rawH, R),
+    PDFTools.posicaoRotacionada(visX1, visY1, 0, 0, rawW, rawH, R)
+  ];
+  const xs = cantos.map(c => c.x), ys = cantos.map(c => c.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+
+  page.drawRectangle({
+    x: minX, y: minY,
+    width: maxX - minX, height: maxY - minY,
+    color: rgb(cor.r, cor.g, cor.b),
+    opacity: 0.4
+  });
+}
+
 function desenharTextoMultilinhaNoPdf(page, item, font, rawW, rawH, angulo) {
   const R = (angulo % 360 + 360) % 360;
   const { degrees, rgb } = window.PDFLib;
@@ -1076,9 +1242,12 @@ async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, aoProgr
   const novoDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
   const numPages = novoDoc.getPageCount();
 
-  // Embute só as variantes de fonte realmente usadas no documento.
+  // Embute só as variantes de fonte realmente usadas no documento (marca texto não precisa
+  // de fonte nenhuma — é só um retângulo colorido).
   const nomesUsados = new Set();
-  Object.values(itensTextoMap).flat().forEach(it => nomesUsados.add(nomeFonteVarianteGlobal(it.familia, it.negrito, it.italico)));
+  Object.values(itensTextoMap).flat()
+    .filter(it => it.tipo !== 'marca')
+    .forEach(it => nomesUsados.add(nomeFonteVarianteGlobal(it.familia, it.negrito, it.italico)));
   const fontesEmbutidas = {};
   for (const nome of nomesUsados) fontesEmbutidas[nome] = await novoDoc.embedFont(StandardFonts[nome]);
 
@@ -1095,6 +1264,10 @@ async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, aoProgr
 
     const listaTextos = itensTextoMap[i] || [];
     for (const item of listaTextos) {
+      if (item.tipo === 'marca') {
+        desenharMarcaNoPdf(page, item, rawSize.width, rawSize.height, anguloOriginal);
+        continue;
+      }
       if (!item.val) continue;
       const font = fontesEmbutidas[nomeFonteVarianteGlobal(item.familia, item.negrito, item.italico)];
       const charRuim = encontrarCaractereNaoSuportadoGlobal(font, item.val);

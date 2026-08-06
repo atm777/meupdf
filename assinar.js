@@ -787,8 +787,15 @@ PDFTools.registrar({
       draggingInfo = null;
     }
 
-    layer.addEventListener('mousemove', doMove); layer.addEventListener('mouseup', doEnd); layer.addEventListener('mouseleave', doEnd);
-    layer.addEventListener('touchmove', doMove, {passive:false}); layer.addEventListener('touchend', doEnd); layer.addEventListener('click', doEnd);
+    // mousemove/mouseup vão no document, não no layer: assim que o arrasto sai de cima do item
+    // pequeno (pointer-events:auto só nos itens, não no layer vazio em volta), um listener preso
+    // ao layer para de receber os eventos no meio do gesto. draggingInfo!=null já garante que só
+    // faz algo quando um arrasto está de fato em andamento.
+    document.addEventListener('mousemove', doMove);
+    document.addEventListener('mouseup', doEnd);
+    document.addEventListener('touchmove', doMove, {passive:false});
+    document.addEventListener('touchend', doEnd);
+    layer.addEventListener('click', doEnd);
 
     function salvarEstado() {
       historico.push(JSON.stringify(assinaturas));
