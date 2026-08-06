@@ -44,7 +44,7 @@ PDFTools.registrar({
         .as-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; }
         #as-modal-desenho { z-index: 10000; }
         .as-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
-        .as-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: auto; position: relative; }
+        .as-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 24px; overflow: auto; position: relative; }
         
         /* Criação de Assinatura */
         .as-cria-painel { background: var(--sup); border-radius: 8px; padding: 24px; width: 500px; max-width: 90%; }
@@ -220,6 +220,7 @@ PDFTools.registrar({
         </div>
 
         <div class="as-modal-body" id="as-modal-body">
+          <div id="as-nav-paginas-slot"></div>
           <div class="as-editor-wrapper" id="as-wrapper">
             <canvas class="as-editor-canvas" id="as-canvas"></canvas>
             <div class="as-editor-layer" id="as-layer"></div>
@@ -600,11 +601,29 @@ PDFTools.registrar({
     // dois dedos no celular (ver criarControleZoom em ui.js).
     let paginaPdfAtual = null;
     let escalaBase = 1;
+    const modalBody = container.querySelector('#as-modal-body');
     const controleZoom = window.PDFTools.UI.criarControleZoom({
-      superficieToque: container.querySelector('#as-modal-body'),
+      superficieToque: modalBody,
       aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); }
     });
     container.querySelector('#as-zoom-slot').appendChild(controleZoom.elemento);
+
+    // Setas ▲/▼ do lado da página pra trocar de página sem sair do editor.
+    const navegadorPaginas = window.PDFTools.UI.criarNavegadorPaginas({
+      aoNavegar: (novoIndice) => abrirEditor(novoIndice)
+    });
+    container.querySelector('#as-nav-paginas-slot').appendChild(navegadorPaginas.elemento);
+
+    // Usa o espaço realmente disponível dentro de #as-modal-body (já descontada a barra do topo
+    // e a faixa do navegador de páginas) em vez de um chute em cima de window.innerHeight —
+    // senão a página "ajustada à tela" fica maior do que cabe de verdade.
+    function calcularEscalaAjuste(viewportRef, fatorMaximo) {
+      const padding = 48; // 24px de padding de cada lado (ver .as-modal-body)
+      const larguraNav = navegadorPaginas.elemento.offsetWidth ? navegadorPaginas.elemento.offsetWidth + 16 : 0;
+      const maxWidth = Math.max(100, modalBody.clientWidth - padding - larguraNav);
+      const maxHeight = Math.max(100, modalBody.clientHeight - padding);
+      return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
+    }
 
     async function renderizarPaginaNoCanvas(fatorZoom) {
       const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom });
@@ -622,13 +641,12 @@ PDFTools.registrar({
       container.querySelector('#as-modal-pagina').textContent = index + 1;
       modalEditor.style.display = 'flex';
       layer.innerHTML = '';
+      navegadorPaginas.atualizar(index, numPages);
 
       const page = await pdfDocJs.getPage(index + 1);
       paginaPdfAtual = page;
       const viewportRef = page.getViewport({ scale: 1.0 });
-      const maxWidth = window.innerWidth * 0.8;
-      const maxHeight = window.innerHeight * 0.75;
-      escalaBase = Math.min(maxWidth/viewportRef.width, maxHeight/viewportRef.height, 1.5);
+      escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
 
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
     }

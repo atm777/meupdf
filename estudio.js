@@ -40,7 +40,7 @@ function montarEstudioUI(container, arquivoInicial) {
 
         .est-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; }
         .est-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-        .est-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: auto; position: relative; }
+        .est-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 24px; overflow: auto; position: relative; }
 
         .est-editor-wrapper { position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; background: var(--sup); }
         .est-editor-canvas { display: block; }
@@ -176,6 +176,7 @@ function montarEstudioUI(container, arquivoInicial) {
         </div>
 
         <div class="est-modal-body" id="est-modal-body">
+          <div id="est-nav-paginas-slot"></div>
           <div class="est-editor-wrapper" id="est-wrapper">
             <canvas class="est-editor-canvas" id="est-canvas"></canvas>
             <canvas class="est-editor-layer-canvas" id="est-traco-canvas"></canvas>
@@ -299,17 +300,26 @@ function montarEstudioUI(container, arquivoInicial) {
     });
     container.querySelector('#est-zoom-slot').appendChild(controleZoom.elemento);
 
+    // Setas ▲/▼ do lado da página pra trocar de página sem sair do editor — como o modal nunca
+    // fecha nessa troca, zoom e tela cheia (se já estiver ativa) continuam do jeito que estavam.
+    const navegadorPaginas = window.PDFTools.UI.criarNavegadorPaginas({
+      aoNavegar: (novoIndice) => abrirEditor(novoIndice)
+    });
+    container.querySelector('#est-nav-paginas-slot').appendChild(navegadorPaginas.elemento);
+
     function obterEscalaAtual() {
       return escalaBase * controleZoom.obterZoom();
     }
 
     // Usa o espaço realmente disponível dentro de #est-modal-body (já descontada a barra do topo,
-    // que pode ocupar 1 ou 2 linhas dependendo da largura da tela) em vez de um chute em cima de
-    // window.innerHeight — senão a página "ajustada à tela" fica mais alta do que cabe de verdade
-    // e a parte de cima acaba renderizada atrás da barra do topo (inacessível a cliques/toque).
+    // que pode ocupar 1 ou 2 linhas dependendo da largura da tela, e a faixa do navegador de
+    // páginas) em vez de um chute em cima de window.innerHeight — senão a página "ajustada à
+    // tela" fica maior do que cabe de verdade e a parte de cima acaba renderizada atrás da barra
+    // do topo (inacessível a cliques/toque).
     function calcularEscalaAjuste(viewportRef, fatorMaximo) {
       const padding = 48; // 24px de padding de cada lado (ver .est-modal-body)
-      const maxWidth = Math.max(100, modalBody.clientWidth - padding);
+      const larguraNav = navegadorPaginas.elemento.offsetWidth ? navegadorPaginas.elemento.offsetWidth + 16 : 0; // +16 = gap
+      const maxWidth = Math.max(100, modalBody.clientWidth - padding - larguraNav);
       const maxHeight = Math.max(100, modalBody.clientHeight - padding);
       return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
     }
@@ -332,6 +342,7 @@ function montarEstudioUI(container, arquivoInicial) {
       container.querySelector('#est-modal-pagina').textContent = index + 1;
       modalEditor.style.display = 'flex';
       layer.innerHTML = '';
+      navegadorPaginas.atualizar(index, numPages);
 
       const page = await pdfDocJs.getPage(index + 1);
       paginaPdfAtual = page;
@@ -525,29 +536,35 @@ function montarEstudioUI(container, arquivoInicial) {
       return null;
     }
 
-    async function recalcularCaixaTexto(item, usarLarguraPadrao) {
+    // `larguraPaginaPt`/`alturaPaginaPt` são opcionais e existem só pro caso de a pessoa navegar
+    // pra outra página (setas ▲/▼) enquanto ainda está commitando um texto da página anterior —
+    // sem isso, o cálculo usaria as dimensões da página NOVA (já trocadas em visPageWidthPt/
+    // visPageHeightPt) pra redimensionar o texto da página ANTIGA.
+    async function recalcularCaixaTexto(item, usarLarguraPadrao, larguraPaginaPt, alturaPaginaPt) {
+      const largPagina = larguraPaginaPt || visPageWidthPt;
+      const altPagina = alturaPaginaPt || visPageHeightPt;
       const fontes = await obterFontesMetricas();
       const font = fontes[nomeFonteVariante(item.familia, item.negrito, item.italico)];
 
       // Nunca deixa a caixa passar da borda direita da página — senão o texto fica escondido
       // "fora" da página no PDF final (visualmente cortado, mesmo com o dado intacto no item).
-      const espacoDisponivelPt = Math.max(visPageWidthPt - item.x * visPageWidthPt, item.tamanhoPt * 3);
+      const espacoDisponivelPt = Math.max(largPagina - item.x * largPagina, item.tamanhoPt * 3);
 
       let larguraCaixaPt;
       if (usarLarguraPadrao) {
         const larguraTextoSemQuebra = font.widthOfTextAtSize((item.val || ' ').replace(/\n/g, ' ') || ' ', item.tamanhoPt);
-        larguraCaixaPt = Math.min(larguraTextoSemQuebra + 10, visPageWidthPt * 0.6, espacoDisponivelPt);
+        larguraCaixaPt = Math.min(larguraTextoSemQuebra + 10, largPagina * 0.6, espacoDisponivelPt);
         larguraCaixaPt = Math.max(larguraCaixaPt, item.tamanhoPt * 3);
       } else {
-        larguraCaixaPt = Math.max(Math.min(item.w * visPageWidthPt, espacoDisponivelPt), item.tamanhoPt * 2);
+        larguraCaixaPt = Math.max(Math.min(item.w * largPagina, espacoDisponivelPt), item.tamanhoPt * 2);
       }
 
       const linhas = quebrarTextoEmLinhas(font, item.val, item.tamanhoPt, larguraCaixaPt);
       const alturaLinhaPt = item.tamanhoPt * 1.25;
       const alturaCaixaPt = Math.max(linhas.length, 1) * alturaLinhaPt + 6;
 
-      item.w = larguraCaixaPt / visPageWidthPt;
-      item.h = alturaCaixaPt / visPageHeightPt;
+      item.w = larguraCaixaPt / largPagina;
+      item.h = alturaCaixaPt / altPagina;
     }
 
     function aplicarEstiloFonteNoElemento(el, item, escala) {
@@ -633,7 +650,13 @@ function montarEstudioUI(container, arquivoInicial) {
 
     async function abrirEdicaoTexto(idx) {
       idxEditando = idx;
-      const item = itensTexto[paginaAtualModal][idx];
+      // Capturados agora: se a pessoa navegar pra outra página (setas ▲/▼) enquanto ainda está
+      // editando este texto, o commit precisa continuar mirando a página/dimensões de ONDE o
+      // texto está, não da página nova que passou a estar visível.
+      const paginaDoItem = paginaAtualModal;
+      const larguraPaginaDoItem = visPageWidthPt;
+      const alturaPaginaDoItem = visPageHeightPt;
+      const item = itensTexto[paginaDoItem][idx];
       if (!item) return;
 
       fonteFamilia = item.familia; fonteTamanhoPt = item.tamanhoPt; fonteCor = item.corHex;
@@ -671,15 +694,17 @@ function montarEstudioUI(container, arquivoInicial) {
         if (idxEditando === idx) idxEditando = null;
         salvarEstado();
         if (!novoTexto.trim()) {
-          itensTexto[paginaAtualModal].splice(idx, 1);
+          itensTexto[paginaDoItem].splice(idx, 1);
         } else {
           item.val = novoTexto;
           item.tamanhoPt = fonteTamanhoPt; item.corHex = fonteCor; item.familia = fonteFamilia;
           item.negrito = fonteNegrito; item.italico = fonteItalico;
           const larguraJaAjustada = item._larguraManual === true;
-          await recalcularCaixaTexto(item, !larguraJaAjustada);
+          await recalcularCaixaTexto(item, !larguraJaAjustada, larguraPaginaDoItem, alturaPaginaDoItem);
         }
-        renderizarItensEditor();
+        // Só re-renderiza a camada se a página ainda for a mesma — se a pessoa já navegou pra
+        // outra página, quem cuida da tela agora é o abrirEditor() que ela disparou.
+        if (paginaAtualModal === paginaDoItem) renderizarItensEditor();
       };
 
       // Não dá pra confiar só no "blur" da textarea: depois que o foco sai dela pela primeira vez
