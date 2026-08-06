@@ -1,15 +1,19 @@
-// "Editar" — ferramenta de pequenas edições: a pessoa escolhe uma página e inclui um rabisco
-// à mão livre (lápis, com tamanhos e cores) ou uma caixa de texto. Não é um editor completo —
-// para girar/remover/reordenar páginas, tarjar, comprimir, dividir etc. há um botão específico
-// para cada uma na barra de ferramentas do topo.
+// "Editar" — ferramenta de pequenas edições: a pessoa escolhe uma página e desenha à mão livre
+// ou inclui caixas de texto diretamente sobre o conteúdo do PDF. Não é um editor completo — para
+// girar/remover/reordenar páginas, tarjar, comprimir, dividir etc. há um botão específico pra
+// cada uma na barra de ferramentas do topo.
 function montarEstudioUI(container, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
     let numPages = 0;
 
-    // itens: { 0: [{tipo:'img'|'texto', val, x, y, w, h}], 1: [...], ... } — mesmo modelo de
-    // item usado em Assinar (coordenadas fracionárias 0-1 relativas ao tamanho da página).
-    let itens = {};
+    // Duas categorias de conteúdo por página, guardadas separadas porque se comportam diferente:
+    // - tracos: traços de lápis à mão livre, vetoriais (pontos normalizados 0-1 + espessura em pt
+    //   + cor). Desenhados direto sobre a página, não são "itens" arrastáveis depois de prontos.
+    // - itensTexto: caixas de texto, com posição/tamanho fracionários (0-1) — essas sim continuam
+    //   arrastáveis/redimensionáveis/apagáveis, e dá pra reabrir pra editar com duplo clique.
+    let tracos = {};
+    let itensTexto = {};
     let historico = [];
     let paginaAtualModal = 0;
 
@@ -34,41 +38,47 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-btn { padding: 6px 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--texto); }
         .est-btn:hover { background: var(--sup-2); }
 
-        /* Modal overlay (compartilhado pelos modais Lápis, Caixa de Texto e Editor de Página) */
         .est-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; }
-        #est-modal-lapis, #est-modal-texto { z-index: 10000; }
-        .est-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+        .est-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
         .est-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: auto; position: relative; }
 
         .est-editor-wrapper { position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; background: var(--sup); }
         .est-editor-canvas { display: block; }
-        .est-editor-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .est-editor-layer-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .est-editor-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 
-        .est-item-arrastavel { position: absolute; border: 1px dashed transparent; cursor: move; }
+        .est-item-arrastavel { position: absolute; border: 1px dashed transparent; cursor: move; pointer-events: auto; }
         .est-item-arrastavel:hover, .est-item-arrastavel.ativo { border-color: var(--cor-primaria); background: rgba(0, 123, 255, 0.05); }
-        .est-item-arrastavel img { width: 100%; height: 100%; object-fit: fill; pointer-events: none; }
-        .est-item-arrastavel .txt { width: 100%; height: 100%; display:flex; align-items:center; font-family: sans-serif; font-size: 16px; color: #000; pointer-events: none; white-space: nowrap; }
+        .est-item-arrastavel .txt { width: 100%; height: 100%; overflow: hidden; white-space: pre; pointer-events: none; }
 
         .est-resize-handle { position: absolute; bottom: -5px; right: -5px; width: 14px; height: 14px; background: var(--cor-primaria); border-radius: 50%; cursor: se-resize; display: none; }
         .est-item-arrastavel.ativo .est-resize-handle { display: block; }
         .est-delete-handle { position: absolute; top: -10px; right: -10px; width: 20px; height: 20px; background: var(--cor-erro); color: white; border-radius: 50%; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; cursor: pointer; display: none; }
         .est-item-arrastavel.ativo .est-delete-handle { display: block; }
 
-        .est-ferramentas-flutuante { position: absolute; top: 80px; left: 24px; background: var(--sup); padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 8px; z-index: 10; width: 200px; }
+        .est-texto-editando-area { width: 100%; height: 100%; border: 1px solid var(--cor-primaria); background: rgba(255,255,255,0.92); resize: none; padding: 2px; margin: 0; outline: none; box-sizing: border-box; }
 
-        /* Modal Lápis / Caixa de Texto (painel de criação, mesmo tamanho pros dois) */
-        .est-cria-painel { background: var(--sup); border-radius: 8px; padding: 24px; width: 500px; max-width: 90%; margin: auto; }
-        .est-desenho-canvas { border: 1px solid var(--borda); border-radius: 4px; width: 100%; height: 260px; touch-action: none; background: #fafafa; cursor: crosshair; }
-        .est-desenho-barra { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
-        .est-desenho-grupo { display: flex; align-items: center; gap: 6px; }
-        .est-desenho-grupo-label { font-size: 12px; font-weight: bold; color: var(--texto-2); margin-right: 2px; }
-        .est-lapis-tamanho { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--borda); background: var(--sup); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .est-ferramentas-flutuante { position: absolute; top: 80px; left: 24px; background: var(--sup); padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 4px; z-index: 10; width: 220px; max-height: calc(100% - 100px); overflow-y: auto; }
+
+        .est-modo-grupo { display: flex; gap: 4px; margin-bottom: 8px; }
+        .est-modo-btn { flex: 1; padding: 8px 2px; font-size: 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; color: var(--texto); }
+        .est-modo-btn.ativo { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
+
+        .est-sub-painel { background: var(--sup-2); border-radius: 6px; padding: 10px; margin-bottom: 8px; }
+        .est-campo-label { display: block; font-size: 11px; font-weight: bold; color: var(--texto-2); margin-bottom: 3px; }
+        .est-select { width: 100%; padding: 6px; border: 1px solid var(--borda); border-radius: 4px; font-size: 13px; background: var(--sup); color: var(--texto); }
+        .est-input-num { width: 56px; padding: 6px; border: 1px solid var(--borda); border-radius: 4px; font-size: 13px; background: var(--sup); color: var(--texto); }
+        .est-toggle-btn { width: 28px; height: 28px; border: 1px solid var(--borda); border-radius: 4px; background: var(--sup); cursor: pointer; color: var(--texto); }
+        .est-toggle-btn.ativo { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
+
+        .est-desenho-grupo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .est-desenho-grupo-label { font-size: 11px; font-weight: bold; color: var(--texto-2); margin-right: 2px; }
+        .est-lapis-tamanho { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--borda); background: var(--sup); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
         .est-lapis-tamanho.ativo { border-color: var(--cor-primaria); }
         .est-lapis-tamanho span { border-radius: 50%; background: #000; display: block; }
-        .est-cor-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: 0 0 0 1px var(--borda); }
+        .est-cor-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: 0 0 0 1px var(--borda); }
         .est-cor-swatch.ativo { border-color: var(--cor-primaria); }
-        .est-cor-custom { width: 26px; height: 26px; border-radius: 50%; border: none; padding: 0; cursor: pointer; background: none; }
-        .est-texto-input { width: 100%; padding: 10px; border: 1px solid var(--borda); border-radius: 4px; font-size: 16px; box-sizing: border-box; min-height: 90px; resize: vertical; background: var(--sup); color: var(--texto); font-family: sans-serif; }
+        .est-cor-custom { width: 24px; height: 24px; border-radius: 50%; border: none; padding: 0; cursor: pointer; background: none; }
       `;
       document.head.appendChild(style);
     }
@@ -77,11 +87,11 @@ function montarEstudioUI(container, arquivoInicial) {
       <div id="est-tela-inicial"></div>
       <div id="est-tela-trabalho" style="display:none;">
         <div class="est-aviso">
-          <strong>O que dá pra fazer aqui:</strong> pequenas edições e inclusões numa página —
-          escrever à mão livre com o lápis (tamanhos e cores) ou incluir uma caixa de texto. Depois
-          de incluir, arraste e redimensione onde quiser antes de gerar o PDF. Para reorganizar,
-          girar ou remover páginas, apagar informações sensíveis, comprimir ou outras alterações
-          maiores, use a ferramenta específica na barra do topo.
+          <strong>O que dá pra fazer aqui:</strong> pequenas edições numa página — desenhar à mão
+          livre com o lápis (tamanhos e cores) ou incluir uma caixa de texto, clicando direto sobre
+          o conteúdo do PDF. Para reorganizar, girar ou remover páginas, apagar informações
+          sensíveis, comprimir ou outras alterações maiores, use a ferramenta específica na barra
+          do topo.
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
           <div style="font-size:16px; font-weight:bold; color:var(--texto);">Clique numa página para editar:</div>
@@ -96,53 +106,6 @@ function montarEstudioUI(container, arquivoInicial) {
         </div>
       </div>
 
-      <!-- Modal Lápis (desenho livre à mão) -->
-      <div id="est-modal-lapis" class="est-modal-overlay">
-        <div class="est-modal-body">
-          <div class="est-cria-painel">
-            <h3 style="margin-top:0;">Desenho Livre</h3>
-            <canvas id="est-draw-livre" class="est-desenho-canvas"></canvas>
-            <div class="est-desenho-barra">
-              <div class="est-desenho-grupo">
-                <span class="est-desenho-grupo-label">Espessura:</span>
-                <button type="button" class="est-lapis-tamanho" data-tamanho="2"><span style="width:4px; height:4px;"></span></button>
-                <button type="button" class="est-lapis-tamanho ativo" data-tamanho="5"><span style="width:8px; height:8px;"></span></button>
-                <button type="button" class="est-lapis-tamanho" data-tamanho="10"><span style="width:14px; height:14px;"></span></button>
-              </div>
-              <div class="est-desenho-grupo">
-                <span class="est-desenho-grupo-label">Cor:</span>
-                <button type="button" class="est-cor-swatch ativo" data-cor="#000000" style="background:#000000;"></button>
-                <button type="button" class="est-cor-swatch" data-cor="#ef4444" style="background:#ef4444;"></button>
-                <button type="button" class="est-cor-swatch" data-cor="#0a58ca" style="background:#0a58ca;"></button>
-                <button type="button" class="est-cor-swatch" data-cor="#10b981" style="background:#10b981;"></button>
-                <button type="button" class="est-cor-swatch" data-cor="#f59e0b" style="background:#f59e0b;"></button>
-                <input type="color" id="est-cor-livre-custom" class="est-cor-custom" value="#000000" title="Outra cor">
-              </div>
-              <button class="est-btn" id="btn-limpar-desenho-livre" style="margin-left:auto;">Limpar</button>
-            </div>
-            <div style="font-size:12px; color: var(--texto-2); margin-top:8px;">Desenhe com o mouse ou o dedo. Dá para arrastar e redimensionar depois de incluir.</div>
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
-              <button class="est-btn" id="btn-cancelar-lapis">Cancelar</button>
-              <button class="est-btn-acao" id="btn-incluir-lapis" style="width:auto; padding:8px 16px;">Incluir</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modal Caixa de Texto -->
-      <div id="est-modal-texto" class="est-modal-overlay">
-        <div class="est-modal-body">
-          <div class="est-cria-painel">
-            <h3 style="margin-top:0;">Caixa de Texto</h3>
-            <textarea id="est-texto-livre" class="est-texto-input" placeholder="Digite o texto..."></textarea>
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
-              <button class="est-btn" id="btn-cancelar-texto">Cancelar</button>
-              <button class="est-btn-acao" id="btn-incluir-texto" style="width:auto; padding:8px 16px;">Incluir</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Modal Editor de Página -->
       <div id="est-modal-editor" class="est-modal-overlay">
         <div class="est-modal-topbar">
@@ -150,14 +113,63 @@ function montarEstudioUI(container, arquivoInicial) {
           <div id="est-zoom-slot"></div>
           <div style="display:flex; gap:8px;">
             <button class="est-btn" id="btn-est-desfazer">Desfazer (Ctrl+Z)</button>
+            <button class="est-btn" id="btn-est-fullscreen">⛶ Tela Cheia</button>
             <button class="est-btn" style="background:var(--cor-primaria); color:white; border-color:var(--cor-primaria);" id="btn-est-fechar">Concluir Página</button>
           </div>
         </div>
 
         <div class="est-ferramentas-flutuante">
-          <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">Incluir na página:</div>
-          <button class="est-btn" id="btn-add-lapis" style="text-align:left;">✏️ Lápis (mão livre)</button>
-          <button class="est-btn" id="btn-add-texto" style="text-align:left;">📝 Caixa de Texto</button>
+          <div class="est-modo-grupo">
+            <button type="button" class="est-modo-btn ativo" data-modo="mover" title="Mover e editar itens">🖐️ Mover</button>
+            <button type="button" class="est-modo-btn" data-modo="lapis" title="Desenhar à mão livre">✏️ Lápis</button>
+            <button type="button" class="est-modo-btn" data-modo="texto" title="Incluir caixa de texto">📝 Texto</button>
+          </div>
+
+          <div class="est-sub-painel" id="est-painel-lapis" style="display:none;">
+            <div class="est-desenho-grupo">
+              <span class="est-desenho-grupo-label">Espessura:</span>
+              <button type="button" class="est-lapis-tamanho" data-tamanho-pt="1.5"><span style="width:4px; height:4px;"></span></button>
+              <button type="button" class="est-lapis-tamanho ativo" data-tamanho-pt="3"><span style="width:8px; height:8px;"></span></button>
+              <button type="button" class="est-lapis-tamanho" data-tamanho-pt="6"><span style="width:14px; height:14px;"></span></button>
+            </div>
+            <div class="est-desenho-grupo" style="margin-top:8px;">
+              <span class="est-desenho-grupo-label">Cor:</span>
+              <button type="button" class="est-cor-swatch ativo" data-cor="#000000" style="background:#000000;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#ef4444" style="background:#ef4444;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#0a58ca" style="background:#0a58ca;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#10b981" style="background:#10b981;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#f59e0b" style="background:#f59e0b;"></button>
+              <input type="color" id="est-lapis-cor-custom" class="est-cor-custom" value="#000000" title="Outra cor">
+            </div>
+            <div style="font-size:11px; color:var(--texto-2); margin-top:8px;">Desenhe com o mouse ou o dedo, direto sobre a página.</div>
+          </div>
+
+          <div class="est-sub-painel" id="est-painel-texto" style="display:none;">
+            <label class="est-campo-label">Fonte</label>
+            <select id="est-fonte-familia" class="est-select">
+              <option value="helvetica">Helvetica</option>
+              <option value="times">Times</option>
+              <option value="courier">Courier</option>
+            </select>
+            <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
+              <div style="flex:1;">
+                <label class="est-campo-label">Tamanho (pt)</label>
+                <input type="number" id="est-fonte-tamanho" class="est-input-num" style="width:100%;" value="16" min="6" max="120">
+              </div>
+              <button type="button" class="est-toggle-btn" id="est-fonte-negrito" title="Negrito"><b>N</b></button>
+              <button type="button" class="est-toggle-btn" id="est-fonte-italico" title="Itálico"><i>I</i></button>
+            </div>
+            <div class="est-desenho-grupo" style="margin-top:8px;">
+              <span class="est-desenho-grupo-label">Cor:</span>
+              <button type="button" class="est-cor-swatch ativo" data-cor="#000000" style="background:#000000;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#ef4444" style="background:#ef4444;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#0a58ca" style="background:#0a58ca;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#10b981" style="background:#10b981;"></button>
+              <button type="button" class="est-cor-swatch" data-cor="#f59e0b" style="background:#f59e0b;"></button>
+              <input type="color" id="est-texto-cor-custom" class="est-cor-custom" value="#000000" title="Outra cor">
+            </div>
+            <div style="font-size:11px; color:var(--texto-2); margin-top:8px;">Clique na página pra incluir texto. Duplo clique num texto (modo Mover) pra editar.</div>
+          </div>
 
           <hr style="border:0; border-top: 1px solid var(--borda); margin:8px 0;">
           <button class="est-btn" id="btn-aplicar-todas" style="text-align:left; color:var(--cor-primaria);">✨ Aplicar a Todas</button>
@@ -166,6 +178,7 @@ function montarEstudioUI(container, arquivoInicial) {
         <div class="est-modal-body" id="est-modal-body">
           <div class="est-editor-wrapper" id="est-wrapper">
             <canvas class="est-editor-canvas" id="est-canvas"></canvas>
+            <canvas class="est-editor-layer-canvas" id="est-traco-canvas"></canvas>
             <div class="est-editor-layer" id="est-layer"></div>
           </div>
         </div>
@@ -196,9 +209,9 @@ function montarEstudioUI(container, arquivoInicial) {
         pdfDocJs = await window.pdfjsLib.getDocument({ data: buffer }).promise;
         numPages = pdfDocJs.numPages;
 
-        itens = {};
-        for (let i = 0; i < numPages; i++) itens[i] = [];
-        historico = [JSON.stringify(itens)];
+        tracos = {}; itensTexto = {};
+        for (let i = 0; i < numPages; i++) { tracos[i] = []; itensTexto[i] = []; }
+        historico = [JSON.stringify({ tracos, itensTexto })];
 
         telaInicial.style.display = 'none';
         telaTrabalho.style.display = 'block';
@@ -229,7 +242,10 @@ function montarEstudioUI(container, arquivoInicial) {
     function atualizarBadges() {
       for (let i = 0; i < numPages; i++) {
         const el = container.querySelector(`.est-pagina[data-index="${i}"]`);
-        if (el) el.querySelector('.est-badge').style.display = (itens[i] && itens[i].length > 0) ? 'block' : 'none';
+        if (el) {
+          const temConteudo = (tracos[i] && tracos[i].length > 0) || (itensTexto[i] && itensTexto[i].length > 0);
+          el.querySelector('.est-badge').style.display = temConteudo ? 'block' : 'none';
+        }
       }
     }
 
@@ -249,19 +265,54 @@ function montarEstudioUI(container, arquivoInicial) {
 
     // --- EDITOR DE PÁGINA ---
     const modalEditor = container.querySelector('#est-modal-editor');
+    const wrapper = container.querySelector('#est-wrapper');
     const layer = container.querySelector('#est-layer');
     const cvsEditor = container.querySelector('#est-canvas');
+    const tracoCanvas = container.querySelector('#est-traco-canvas');
 
-    // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página; o fator
-    // do controle de zoom multiplica em cima disso. Lupa/botões no desktop, pinça de dois dedos
-    // no celular (ver criarControleZoom em ui.js).
+    let modoAtual = 'mover'; // 'mover' | 'lapis' | 'texto'
+    let idxEditando = null;
     let paginaPdfAtual = null;
     let escalaBase = 1;
+    let visPageWidthPt = 1, visPageHeightPt = 1;
+
+    // Lápis
+    let lapisTamanhoPt = 3;
+    let lapisCor = '#000000';
+    let tracoEmAndamento = null;
+    let desenhandoAgora = false;
+
+    // Texto (configuração pro PRÓXIMO texto a ser criado; um item já criado guarda a própria)
+    let fonteFamilia = 'helvetica';
+    let fonteTamanhoPt = 16;
+    let fonteCor = '#000000';
+    let fonteNegrito = false;
+    let fonteItalico = false;
+
+    // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página (ou ao
+    // entrar/sair da tela cheia); o fator do controle de zoom multiplica em cima disso. Lupa/
+    // botões no desktop, pinça de dois dedos no celular (ver criarControleZoom em ui.js).
+    const modalBody = container.querySelector('#est-modal-body');
     const controleZoom = window.PDFTools.UI.criarControleZoom({
-      superficieToque: container.querySelector('#est-modal-body'),
+      superficieToque: modalBody,
       aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); }
     });
     container.querySelector('#est-zoom-slot').appendChild(controleZoom.elemento);
+
+    function obterEscalaAtual() {
+      return escalaBase * controleZoom.obterZoom();
+    }
+
+    // Usa o espaço realmente disponível dentro de #est-modal-body (já descontada a barra do topo,
+    // que pode ocupar 1 ou 2 linhas dependendo da largura da tela) em vez de um chute em cima de
+    // window.innerHeight — senão a página "ajustada à tela" fica mais alta do que cabe de verdade
+    // e a parte de cima acaba renderizada atrás da barra do topo (inacessível a cliques/toque).
+    function calcularEscalaAjuste(viewportRef, fatorMaximo) {
+      const padding = 48; // 24px de padding de cada lado (ver .est-modal-body)
+      const maxWidth = Math.max(100, modalBody.clientWidth - padding);
+      const maxHeight = Math.max(100, modalBody.clientHeight - padding);
+      return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
+    }
 
     async function renderizarPaginaNoCanvas(fatorZoom) {
       const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom });
@@ -271,11 +322,13 @@ function montarEstudioUI(container, arquivoInicial) {
       ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cvsEditor.width, cvsEditor.height);
       await paginaPdfAtual.render({ canvasContext: ctx, viewport }).promise;
 
+      redesenharTracos();
       renderizarItensEditor();
     }
 
     async function abrirEditor(index) {
       paginaAtualModal = index;
+      idxEditando = null;
       container.querySelector('#est-modal-pagina').textContent = index + 1;
       modalEditor.style.display = 'flex';
       layer.innerHTML = '';
@@ -283,17 +336,396 @@ function montarEstudioUI(container, arquivoInicial) {
       const page = await pdfDocJs.getPage(index + 1);
       paginaPdfAtual = page;
       const viewportRef = page.getViewport({ scale: 1.0 });
-      const maxWidth = window.innerWidth * 0.8;
-      const maxHeight = window.innerHeight * 0.75;
-      escalaBase = Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, 1.5);
+      visPageWidthPt = viewportRef.width;
+      visPageHeightPt = viewportRef.height;
 
+      escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
+
+      definirModo('mover');
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
     }
 
-    function renderizarItensEditor() {
+    // --- MODO (Mover / Lápis / Texto) ---
+    function definirModo(novoModo) {
+      modoAtual = novoModo;
+      container.querySelectorAll('.est-modo-btn').forEach(b => b.classList.toggle('ativo', b.dataset.modo === novoModo));
+      container.querySelector('#est-painel-lapis').style.display = novoModo === 'lapis' ? 'block' : 'none';
+      container.querySelector('#est-painel-texto').style.display = novoModo === 'texto' ? 'block' : 'none';
+      tracoCanvas.style.pointerEvents = novoModo === 'lapis' ? 'auto' : 'none';
+      wrapper.style.cursor = novoModo === 'lapis' ? 'crosshair' : (novoModo === 'texto' ? 'text' : 'default');
+    }
+    container.querySelectorAll('.est-modo-btn').forEach(btn => {
+      btn.onclick = () => definirModo(btn.dataset.modo);
+    });
+
+    // --- LÁPIS: desenho vetorial direto sobre a página ---
+    container.querySelectorAll('#est-painel-lapis .est-lapis-tamanho').forEach(btn => {
+      btn.onclick = () => {
+        container.querySelectorAll('#est-painel-lapis .est-lapis-tamanho').forEach(b => b.classList.remove('ativo'));
+        btn.classList.add('ativo');
+        lapisTamanhoPt = parseFloat(btn.dataset.tamanhoPt);
+      };
+    });
+    container.querySelectorAll('#est-painel-lapis .est-cor-swatch').forEach(btn => {
+      btn.onclick = () => {
+        lapisCor = btn.dataset.cor;
+        container.querySelectorAll('#est-painel-lapis .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
+        btn.classList.add('ativo');
+      };
+    });
+    container.querySelector('#est-lapis-cor-custom').oninput = (e) => {
+      lapisCor = e.target.value;
+      container.querySelectorAll('#est-painel-lapis .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
+    };
+
+    function posRelativaCanvas(e, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      let cx = e.clientX, cy = e.clientY;
+      if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+      const escalaX = canvas.width / rect.width;
+      const escalaY = canvas.height / rect.height;
+      return { x: (cx - rect.left) * escalaX, y: (cy - rect.top) * escalaY };
+    }
+
+    function iniciarTraco(e) {
+      if (modoAtual !== 'lapis') return;
+      e.preventDefault();
+      desenhandoAgora = true;
+      const p = posRelativaCanvas(e, tracoCanvas);
+      tracoEmAndamento = { pontosPx: [p], corHex: lapisCor, larguraPt: lapisTamanhoPt };
+      const ctx = tracoCanvas.getContext('2d');
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = lapisCor;
+      ctx.lineWidth = lapisTamanhoPt * obterEscalaAtual();
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    }
+    function moverTraco(e) {
+      if (!desenhandoAgora || !tracoEmAndamento) return;
+      e.preventDefault();
+      const p = posRelativaCanvas(e, tracoCanvas);
+      const pontos = tracoEmAndamento.pontosPx;
+      const last = pontos[pontos.length - 1];
+      const xc = (last.x + p.x) / 2, yc = (last.y + p.y) / 2;
+      const ctx = tracoCanvas.getContext('2d');
+      ctx.quadraticCurveTo(last.x, last.y, xc, yc);
+      ctx.stroke();
+      pontos.push(p);
+    }
+    function finalizarTraco() {
+      if (!desenhandoAgora) return;
+      desenhandoAgora = false;
+      if (tracoEmAndamento && tracoEmAndamento.pontosPx.length > 1) {
+        salvarEstado();
+        const w = tracoCanvas.width, h = tracoCanvas.height;
+        const pontosNorm = tracoEmAndamento.pontosPx.map(p => ({ x: p.x / w, y: p.y / h }));
+        tracos[paginaAtualModal].push({ pontosNorm, corHex: tracoEmAndamento.corHex, larguraPt: tracoEmAndamento.larguraPt });
+      }
+      tracoEmAndamento = null;
+    }
+
+    tracoCanvas.addEventListener('mousedown', iniciarTraco);
+    tracoCanvas.addEventListener('mousemove', moverTraco);
+    tracoCanvas.addEventListener('mouseup', finalizarTraco);
+    tracoCanvas.addEventListener('mouseleave', finalizarTraco);
+    tracoCanvas.addEventListener('touchstart', iniciarTraco, { passive: false });
+    tracoCanvas.addEventListener('touchmove', moverTraco, { passive: false });
+    tracoCanvas.addEventListener('touchend', finalizarTraco);
+
+    function redesenharTracos() {
+      tracoCanvas.width = cvsEditor.width;
+      tracoCanvas.height = cvsEditor.height;
+      const ctx = tracoCanvas.getContext('2d');
+      ctx.clearRect(0, 0, tracoCanvas.width, tracoCanvas.height);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const escala = obterEscalaAtual();
+      const lista = tracos[paginaAtualModal] || [];
+      lista.forEach(tr => {
+        if (!tr.pontosNorm || tr.pontosNorm.length < 2) return;
+        ctx.strokeStyle = tr.corHex;
+        ctx.lineWidth = tr.larguraPt * escala;
+        ctx.beginPath();
+        tr.pontosNorm.forEach((p, i) => {
+          const px = p.x * tracoCanvas.width, py = p.y * tracoCanvas.height;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+      });
+    }
+
+    // --- TEXTO: fontes padrão + métricas (pdf-lib) ---
+    let _fontesMetricasCache = null;
+    async function obterFontesMetricas() {
+      if (_fontesMetricasCache) return _fontesMetricasCache;
+      await PDFTools.carregarLib('pdf-lib');
+      const { PDFDocument, StandardFonts } = window.PDFLib;
+      const scratch = await PDFDocument.create();
+      const nomes = ['Helvetica', 'HelveticaBold', 'HelveticaOblique', 'HelveticaBoldOblique',
+                     'TimesRoman', 'TimesRomanBold', 'TimesRomanItalic', 'TimesRomanBoldItalic',
+                     'Courier', 'CourierBold', 'CourierOblique', 'CourierBoldOblique'];
+      const fontes = {};
+      for (const nome of nomes) fontes[nome] = await scratch.embedFont(StandardFonts[nome]);
+      _fontesMetricasCache = fontes;
+      return fontes;
+    }
+
+    function nomeFonteVariante(familia, negrito, italico) {
+      const mapa = {
+        helvetica: { r: 'Helvetica', b: 'HelveticaBold', i: 'HelveticaOblique', bi: 'HelveticaBoldOblique' },
+        times: { r: 'TimesRoman', b: 'TimesRomanBold', i: 'TimesRomanItalic', bi: 'TimesRomanBoldItalic' },
+        courier: { r: 'Courier', b: 'CourierBold', i: 'CourierOblique', bi: 'CourierBoldOblique' }
+      };
+      const g = mapa[familia] || mapa.helvetica;
+      if (negrito && italico) return g.bi;
+      if (negrito) return g.b;
+      if (italico) return g.i;
+      return g.r;
+    }
+
+    function obterFontFamilyCss(familia) {
+      if (familia === 'times') return "'Times New Roman', Times, serif";
+      if (familia === 'courier') return "'Courier New', Courier, monospace";
+      return 'Helvetica, Arial, sans-serif';
+    }
+
+    function hexParaRgbFracao(hex) {
+      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      if (!m) return { r: 0, g: 0, b: 0 };
+      return { r: parseInt(m[1], 16) / 255, g: parseInt(m[2], 16) / 255, b: parseInt(m[3], 16) / 255 };
+    }
+
+    // Quebra o texto em linhas que cabem em larguraMaxPt (uma palavra de cada vez), preservando
+    // as quebras de linha (\n) que a pessoa digitou. Usada tanto na prévia quanto na exportação —
+    // é o que garante que a tela mostra exatamente o que vai sair no PDF.
+    function quebrarTextoEmLinhas(font, texto, tamanhoPt, larguraMaxPt) {
+      const linhasFinais = [];
+      const paragrafos = (texto || '').split('\n');
+      for (const paragrafo of paragrafos) {
+        if (paragrafo === '') { linhasFinais.push(''); continue; }
+        const palavras = paragrafo.split(' ');
+        let linhaAtual = '';
+        for (const palavra of palavras) {
+          const tentativa = linhaAtual ? linhaAtual + ' ' + palavra : palavra;
+          if (!linhaAtual || font.widthOfTextAtSize(tentativa, tamanhoPt) <= larguraMaxPt) {
+            linhaAtual = tentativa;
+          } else {
+            linhasFinais.push(linhaAtual);
+            linhaAtual = palavra;
+          }
+        }
+        linhasFinais.push(linhaAtual);
+      }
+      return linhasFinais;
+    }
+
+    function encontrarCaractereNaoSuportado(font, texto) {
+      for (const ch of texto) {
+        if (ch === '\n') continue;
+        try { font.widthOfTextAtSize(ch, 10); } catch (e) { return ch; }
+      }
+      return null;
+    }
+
+    async function recalcularCaixaTexto(item, usarLarguraPadrao) {
+      const fontes = await obterFontesMetricas();
+      const font = fontes[nomeFonteVariante(item.familia, item.negrito, item.italico)];
+
+      // Nunca deixa a caixa passar da borda direita da página — senão o texto fica escondido
+      // "fora" da página no PDF final (visualmente cortado, mesmo com o dado intacto no item).
+      const espacoDisponivelPt = Math.max(visPageWidthPt - item.x * visPageWidthPt, item.tamanhoPt * 3);
+
+      let larguraCaixaPt;
+      if (usarLarguraPadrao) {
+        const larguraTextoSemQuebra = font.widthOfTextAtSize((item.val || ' ').replace(/\n/g, ' ') || ' ', item.tamanhoPt);
+        larguraCaixaPt = Math.min(larguraTextoSemQuebra + 10, visPageWidthPt * 0.6, espacoDisponivelPt);
+        larguraCaixaPt = Math.max(larguraCaixaPt, item.tamanhoPt * 3);
+      } else {
+        larguraCaixaPt = Math.max(Math.min(item.w * visPageWidthPt, espacoDisponivelPt), item.tamanhoPt * 2);
+      }
+
+      const linhas = quebrarTextoEmLinhas(font, item.val, item.tamanhoPt, larguraCaixaPt);
+      const alturaLinhaPt = item.tamanhoPt * 1.25;
+      const alturaCaixaPt = Math.max(linhas.length, 1) * alturaLinhaPt + 6;
+
+      item.w = larguraCaixaPt / visPageWidthPt;
+      item.h = alturaCaixaPt / visPageHeightPt;
+    }
+
+    function aplicarEstiloFonteNoElemento(el, item, escala) {
+      el.style.fontFamily = obterFontFamilyCss(item.familia);
+      el.style.fontSize = (item.tamanhoPt * escala) + 'px';
+      el.style.color = item.corHex;
+      el.style.fontWeight = item.negrito ? 'bold' : 'normal';
+      el.style.fontStyle = item.italico ? 'italic' : 'normal';
+      el.style.lineHeight = '1.25';
+    }
+
+    // --- Controles de fonte na barra flutuante ---
+    function sincronizarControlesFonte() {
+      container.querySelector('#est-fonte-familia').value = fonteFamilia;
+      container.querySelector('#est-fonte-tamanho').value = fonteTamanhoPt;
+      container.querySelector('#est-fonte-negrito').classList.toggle('ativo', fonteNegrito);
+      container.querySelector('#est-fonte-italico').classList.toggle('ativo', fonteItalico);
+      container.querySelectorAll('#est-painel-texto .est-cor-swatch').forEach(b => b.classList.toggle('ativo', b.dataset.cor === fonteCor));
+    }
+
+    function aoMudarControleFonte() {
+      if (idxEditando === null) return;
+      const item = itensTexto[paginaAtualModal][idxEditando];
+      if (!item) return;
+      item.tamanhoPt = fonteTamanhoPt; item.corHex = fonteCor; item.familia = fonteFamilia;
+      item.negrito = fonteNegrito; item.italico = fonteItalico;
+      const el = layer.children[idxEditando];
+      const ta = el && el.querySelector('.est-texto-editando-area');
+      if (ta) aplicarEstiloFonteNoElemento(ta, item, obterEscalaAtual());
+    }
+
+    container.querySelector('#est-fonte-familia').onchange = (e) => { fonteFamilia = e.target.value; aoMudarControleFonte(); };
+    container.querySelector('#est-fonte-tamanho').oninput = (e) => {
+      fonteTamanhoPt = Math.max(6, parseFloat(e.target.value) || 16);
+      aoMudarControleFonte();
+    };
+    container.querySelector('#est-fonte-negrito').onclick = (e) => {
+      fonteNegrito = !fonteNegrito;
+      e.currentTarget.classList.toggle('ativo', fonteNegrito);
+      aoMudarControleFonte();
+    };
+    container.querySelector('#est-fonte-italico').onclick = (e) => {
+      fonteItalico = !fonteItalico;
+      e.currentTarget.classList.toggle('ativo', fonteItalico);
+      aoMudarControleFonte();
+    };
+    container.querySelectorAll('#est-painel-texto .est-cor-swatch').forEach(btn => {
+      btn.onclick = () => {
+        fonteCor = btn.dataset.cor;
+        container.querySelectorAll('#est-painel-texto .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
+        btn.classList.add('ativo');
+        aoMudarControleFonte();
+      };
+    });
+    container.querySelector('#est-texto-cor-custom').oninput = (e) => {
+      fonteCor = e.target.value;
+      container.querySelectorAll('#est-painel-texto .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
+      aoMudarControleFonte();
+    };
+
+    // --- Clique na página (modo Texto) cria uma caixa nova e já abre pra digitar ---
+    wrapper.addEventListener('click', (e) => {
+      if (modoAtual !== 'texto') return;
+      if (e.target.closest('.est-texto-editando-area')) return;
+      const rect = cvsEditor.getBoundingClientRect();
+      const xFrac = (e.clientX - rect.left) / rect.width;
+      const yFrac = (e.clientY - rect.top) / rect.height;
+      if (xFrac < 0 || xFrac > 1 || yFrac < 0 || yFrac > 1) return;
+      criarNovoItemTexto(xFrac, yFrac);
+    });
+
+    function criarNovoItemTexto(xFrac, yFrac) {
+      const linhaAlturaFrac = (fonteTamanhoPt * 1.25) / visPageHeightPt;
+      const item = {
+        tipo: 'texto', val: '', x: xFrac, y: yFrac, w: 0.3, h: linhaAlturaFrac,
+        tamanhoPt: fonteTamanhoPt, corHex: fonteCor, familia: fonteFamilia,
+        negrito: fonteNegrito, italico: fonteItalico
+      };
+      itensTexto[paginaAtualModal].push(item);
+      const idx = itensTexto[paginaAtualModal].length - 1;
+      renderizarItensEditor().then(() => abrirEdicaoTexto(idx));
+    }
+
+    async function abrirEdicaoTexto(idx) {
+      idxEditando = idx;
+      const item = itensTexto[paginaAtualModal][idx];
+      if (!item) return;
+
+      fonteFamilia = item.familia; fonteTamanhoPt = item.tamanhoPt; fonteCor = item.corHex;
+      fonteNegrito = item.negrito; fonteItalico = item.italico;
+      sincronizarControlesFonte();
+      if (modoAtual !== 'texto') definirModo('texto');
+
+      await renderizarItensEditor();
+      const el = layer.children[idx];
+      if (!el) return;
+      const txtDiv = el.querySelector('.txt');
+      if (txtDiv) txtDiv.style.display = 'none';
+
+      const ta = document.createElement('textarea');
+      ta.className = 'est-texto-editando-area';
+      ta.value = item.val;
+      aplicarEstiloFonteNoElemento(ta, item, obterEscalaAtual());
+      el.appendChild(ta);
+      ta.focus();
+      ta.select();
+
+      const commit = async () => {
+        const novoTexto = ta.value;
+        const fontes = await obterFontesMetricas();
+        const fonteTeste = fontes[nomeFonteVariante(fonteFamilia, fonteNegrito, fonteItalico)];
+        const charRuim = novoTexto ? encontrarCaractereNaoSuportado(fonteTeste, novoTexto) : null;
+        if (charRuim) {
+          PDFTools.UI.mostrarToast(`O caractere "${charRuim}" não é suportado por essa fonte — tente removê-lo ou trocar a fonte.`, 'erro');
+          return; // mantém a caixa aberta pra pessoa corrigir
+        }
+
+        document.removeEventListener('mousedown', aoCliqueFora, true);
+        // Só limpa idxEditando se ele ainda apontar pra este item — um clique que cria uma caixa
+        // nova enquanto esta ainda estava commitando (assíncrono) já pode ter avançado o índice.
+        if (idxEditando === idx) idxEditando = null;
+        salvarEstado();
+        if (!novoTexto.trim()) {
+          itensTexto[paginaAtualModal].splice(idx, 1);
+        } else {
+          item.val = novoTexto;
+          item.tamanhoPt = fonteTamanhoPt; item.corHex = fonteCor; item.familia = fonteFamilia;
+          item.negrito = fonteNegrito; item.italico = fonteItalico;
+          const larguraJaAjustada = item._larguraManual === true;
+          await recalcularCaixaTexto(item, !larguraJaAjustada);
+        }
+        renderizarItensEditor();
+      };
+
+      // Não dá pra confiar só no "blur" da textarea: depois que o foco sai dela pela primeira vez
+      // (ex: clicou no seletor de fonte), ele não volta sozinho — cliques seguintes em OUTROS
+      // controles não disparam mais nenhum evento nela. Por isso ouvimos mousedown no document
+      // inteiro (fase de captura, roda antes de qualquer outro clique): só NÃO commita se o clique
+      // foi dentro da própria caixa de texto ou dentro do painel de fonte (ajustando as opções).
+      function aoCliqueFora(e) {
+        if (ta.contains(e.target)) return;
+        if (e.target.closest && e.target.closest('#est-painel-texto')) return;
+        commit();
+      }
+      document.addEventListener('mousedown', aoCliqueFora, true);
+
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); commit(); }
+        e.stopPropagation(); // não deixa o Ctrl+Z global (desfazer da página) roubar teclas do textarea
+      });
+    }
+
+    // --- APLICAR A TODAS ---
+    container.querySelector('#btn-aplicar-todas').onclick = () => {
+      const ts = tracos[paginaAtualModal] || [];
+      const its = itensTexto[paginaAtualModal] || [];
+      if (ts.length === 0 && its.length === 0) return alert('Inclua pelo menos um traço ou texto nesta página primeiro.');
+      if (confirm('Replicar tudo desta página (traços e textos) para TODAS as páginas do documento? Isso sobrescreve a edição das outras.')) {
+        salvarEstado();
+        const cloneTs = JSON.parse(JSON.stringify(ts));
+        const cloneIts = JSON.parse(JSON.stringify(its));
+        for (let i = 0; i < numPages; i++) {
+          tracos[i] = JSON.parse(JSON.stringify(cloneTs));
+          itensTexto[i] = JSON.parse(JSON.stringify(cloneIts));
+        }
+        redesenharTracos();
+        renderizarItensEditor();
+        PDFTools.UI.mostrarToast('Aplicado a todas as páginas com sucesso.', 'sucesso');
+      }
+    };
+
+    // --- Renderização dos itens de texto (arrastáveis) ---
+    async function renderizarItensEditor() {
       layer.innerHTML = '';
-      const lista = itens[paginaAtualModal] || [];
+      const lista = itensTexto[paginaAtualModal] || [];
       const w = cvsEditor.width, h = cvsEditor.height;
+      const escala = obterEscalaAtual();
+      const fontes = await obterFontesMetricas();
 
       lista.forEach((item, idx) => {
         const el = document.createElement('div');
@@ -303,191 +735,38 @@ function montarEstudioUI(container, arquivoInicial) {
         el.style.width = (item.w * w) + 'px';
         el.style.height = (item.h * h) + 'px';
 
-        if (item.tipo === 'img') {
-          const img = document.createElement('img');
-          img.src = item.val;
-          el.appendChild(img);
-        } else {
-          const txt = document.createElement('div');
-          txt.className = 'txt';
-          txt.textContent = item.val;
-          el.appendChild(txt);
-        }
+        const txt = document.createElement('div');
+        txt.className = 'txt';
+        aplicarEstiloFonteNoElemento(txt, item, escala);
+        const font = fontes[nomeFonteVariante(item.familia, item.negrito, item.italico)];
+        const linhas = quebrarTextoEmLinhas(font, item.val, item.tamanhoPt, Math.max(item.w * visPageWidthPt, 1));
+        txt.textContent = linhas.join('\n');
+        el.appendChild(txt);
 
         const resizer = document.createElement('div'); resizer.className = 'est-resize-handle'; el.appendChild(resizer);
         const del = document.createElement('div'); del.className = 'est-delete-handle'; del.textContent = '✕'; el.appendChild(del);
 
-        el.onmousedown = (e) => startDrag(e, idx, el);
-        el.ontouchstart = (e) => startDrag(e, idx, el);
-        resizer.onmousedown = (e) => startResize(e, idx, el);
-        resizer.ontouchstart = (e) => startResize(e, idx, el);
-        del.onclick = (e) => { e.stopPropagation(); salvarEstado(); itens[paginaAtualModal].splice(idx, 1); renderizarItensEditor(); };
+        el.onmousedown = (e) => { if (modoAtual === 'mover') startDrag(e, idx, el); };
+        el.ontouchstart = (e) => { if (modoAtual === 'mover') startDrag(e, idx, el); };
+        el.ondblclick = (e) => { if (modoAtual === 'mover') { e.stopPropagation(); abrirEdicaoTexto(idx); } };
+        resizer.onmousedown = (e) => { if (modoAtual === 'mover') startResize(e, idx, el); };
+        resizer.ontouchstart = (e) => { if (modoAtual === 'mover') startResize(e, idx, el); };
+        del.onclick = (e) => {
+          if (modoAtual !== 'mover') return;
+          e.stopPropagation(); salvarEstado();
+          itensTexto[paginaAtualModal].splice(idx, 1);
+          renderizarItensEditor();
+        };
 
         layer.appendChild(el);
       });
     }
 
-    // --- LÁPIS (desenho livre à mão) ---
-    const modalLapis = container.querySelector('#est-modal-lapis');
-    const drawLivreCanvas = container.querySelector('#est-draw-livre');
-    const ctxDrawLivre = drawLivreCanvas.getContext('2d', { willReadFrequently: true });
-    let lapisTamanho = 5;
-    let lapisCor = '#000000';
-
-    function resizeDrawLivreCanvas() {
-      const rect = drawLivreCanvas.getBoundingClientRect();
-      drawLivreCanvas.width = rect.width * 2;
-      drawLivreCanvas.height = rect.height * 2;
-      ctxDrawLivre.scale(2, 2);
-      ctxDrawLivre.lineCap = 'round';
-      ctxDrawLivre.lineJoin = 'round';
-      ctxDrawLivre.lineWidth = lapisTamanho;
-      ctxDrawLivre.strokeStyle = lapisCor;
-    }
-
-    container.querySelector('#btn-add-lapis').onclick = () => {
-      modalLapis.style.display = 'flex';
-      setTimeout(resizeDrawLivreCanvas, 50);
-    };
-    container.querySelector('#btn-cancelar-lapis').onclick = () => { modalLapis.style.display = 'none'; };
-
-    container.querySelectorAll('.est-lapis-tamanho').forEach(btn => {
-      btn.onclick = () => {
-        container.querySelectorAll('.est-lapis-tamanho').forEach(b => b.classList.remove('ativo'));
-        btn.classList.add('ativo');
-        lapisTamanho = parseInt(btn.dataset.tamanho);
-        ctxDrawLivre.lineWidth = lapisTamanho;
-      };
-    });
-
-    function selecionarCorLivre(cor) {
-      lapisCor = cor;
-      ctxDrawLivre.strokeStyle = lapisCor;
-      container.querySelectorAll('.est-cor-swatch').forEach(b => b.classList.toggle('ativo', b.dataset.cor === cor));
-    }
-    container.querySelectorAll('.est-cor-swatch').forEach(btn => {
-      btn.onclick = () => selecionarCorLivre(btn.dataset.cor);
-    });
-    container.querySelector('#est-cor-livre-custom').oninput = (e) => {
-      container.querySelectorAll('.est-cor-swatch').forEach(b => b.classList.remove('ativo'));
-      lapisCor = e.target.value;
-      ctxDrawLivre.strokeStyle = lapisCor;
-    };
-
-    let isDrawingLivre = false, lastLX = 0, lastLY = 0;
-    function getDrawLivrePos(e) {
-      const rect = drawLivreCanvas.getBoundingClientRect();
-      let cx = e.clientX, cy = e.clientY;
-      if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
-      return { x: cx - rect.left, y: cy - rect.top };
-    }
-    function startDrawLivre(e) {
-      e.preventDefault(); isDrawingLivre = true;
-      const p = getDrawLivrePos(e); lastLX = p.x; lastLY = p.y;
-      ctxDrawLivre.beginPath(); ctxDrawLivre.moveTo(lastLX, lastLY);
-    }
-    function moveDrawLivre(e) {
-      if (!isDrawingLivre) return;
-      e.preventDefault(); const p = getDrawLivrePos(e);
-      const xc = (lastLX + p.x) / 2; const yc = (lastLY + p.y) / 2;
-      ctxDrawLivre.quadraticCurveTo(lastLX, lastLY, xc, yc); ctxDrawLivre.stroke();
-      lastLX = p.x; lastLY = p.y;
-    }
-    function stopDrawLivre() { isDrawingLivre = false; }
-
-    drawLivreCanvas.addEventListener('mousedown', startDrawLivre);
-    drawLivreCanvas.addEventListener('mousemove', moveDrawLivre);
-    drawLivreCanvas.addEventListener('mouseup', stopDrawLivre);
-    drawLivreCanvas.addEventListener('mouseleave', stopDrawLivre);
-    drawLivreCanvas.addEventListener('touchstart', startDrawLivre, {passive:false});
-    drawLivreCanvas.addEventListener('touchmove', moveDrawLivre, {passive:false});
-    drawLivreCanvas.addEventListener('touchend', stopDrawLivre);
-
-    container.querySelector('#btn-limpar-desenho-livre').onclick = () => {
-      ctxDrawLivre.clearRect(0, 0, drawLivreCanvas.width, drawLivreCanvas.height);
-    };
-
-    container.querySelector('#btn-incluir-lapis').onclick = () => {
-      const w = drawLivreCanvas.width, h = drawLivreCanvas.height;
-      if (w === 0) return;
-      const d = ctxDrawLivre.getImageData(0, 0, w, h).data;
-      let minX = w, minY = h, maxX = 0, maxY = 0;
-      let hasPixels = false;
-
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          if (d[(y * w + x) * 4 + 3] > 10) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-            hasPixels = true;
-          }
-        }
-      }
-
-      if (!hasPixels) return alert('Desenhe algo antes de incluir.');
-
-      const pad = 10;
-      minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
-      maxX = Math.min(w, maxX + pad); maxY = Math.min(h, maxY + pad);
-
-      const cropCvs = document.createElement('canvas');
-      cropCvs.width = maxX - minX; cropCvs.height = maxY - minY;
-      cropCvs.getContext('2d').putImageData(ctxDrawLivre.getImageData(minX, minY, cropCvs.width, cropCvs.height), 0, 0);
-
-      const dataUrl = cropCvs.toDataURL('image/png');
-      const ratio = cropCvs.height / cropCvs.width;
-      const wFrac = 0.3;
-
-      salvarEstado();
-      itens[paginaAtualModal].push({ tipo: 'img', val: dataUrl, x: 0.35, y: 0.4, w: wFrac, h: wFrac * ratio });
-      renderizarItensEditor();
-
-      modalLapis.style.display = 'none';
-      ctxDrawLivre.clearRect(0, 0, drawLivreCanvas.width, drawLivreCanvas.height);
-    };
-
-    // --- CAIXA DE TEXTO ---
-    const modalTexto = container.querySelector('#est-modal-texto');
-    const inputTextoLivre = container.querySelector('#est-texto-livre');
-
-    container.querySelector('#btn-add-texto').onclick = () => {
-      inputTextoLivre.value = '';
-      modalTexto.style.display = 'flex';
-      setTimeout(() => inputTextoLivre.focus(), 50);
-    };
-    container.querySelector('#btn-cancelar-texto').onclick = () => { modalTexto.style.display = 'none'; };
-
-    container.querySelector('#btn-incluir-texto').onclick = () => {
-      const txt = inputTextoLivre.value.trim();
-      if (!txt) return alert('Digite um texto antes de incluir.');
-
-      salvarEstado();
-      const largura = Math.min(0.6, 0.08 + txt.length * 0.012);
-      itens[paginaAtualModal].push({ tipo: 'texto', val: txt, x: 0.35, y: 0.45, w: largura, h: 0.05 });
-      renderizarItensEditor();
-
-      modalTexto.style.display = 'none';
-    };
-
-    // --- APLICAR A TODAS ---
-    container.querySelector('#btn-aplicar-todas').onclick = () => {
-      const ts = itens[paginaAtualModal];
-      if (!ts || ts.length === 0) return alert('Inclua pelo menos um item nesta página primeiro.');
-      if (confirm('Replicar todos os itens e posições atuais para TODAS as páginas do documento? Isso sobrescreve a edição das outras.')) {
-        salvarEstado();
-        const clone = JSON.parse(JSON.stringify(ts));
-        for (let i = 0; i < numPages; i++) itens[i] = JSON.parse(JSON.stringify(clone));
-        PDFTools.UI.mostrarToast('Aplicado a todas as páginas com sucesso.', 'sucesso');
-      }
-    };
-
-    // --- DRAG E RESIZE ---
+    // --- DRAG E RESIZE (itens de texto) ---
     let draggingInfo = null;
 
     function startDrag(e, idx, el) {
-      if (e.target.classList.contains('est-resize-handle') || e.target.classList.contains('est-delete-handle')) return;
+      if (e.target.classList.contains('est-resize-handle') || e.target.classList.contains('est-delete-handle') || e.target.classList.contains('est-texto-editando-area')) return;
       e.preventDefault(); e.stopPropagation();
       document.querySelectorAll('.est-item-arrastavel').forEach(el => el.classList.remove('ativo'));
       el.classList.add('ativo');
@@ -519,9 +798,7 @@ function montarEstudioUI(container, arquivoInicial) {
         el.style.left = (draggingInfo.initL + dx) + 'px';
         el.style.top = (draggingInfo.initT + dy) + 'px';
       } else {
-        const maxD = Math.max(dx, dy);
-        el.style.width = Math.max(20, draggingInfo.initW + maxD) + 'px';
-        el.style.height = Math.max(10, draggingInfo.initH + (maxD * (draggingInfo.initH / draggingInfo.initW))) + 'px';
+        el.style.width = Math.max(20, draggingInfo.initW + dx) + 'px';
       }
     }
 
@@ -532,34 +809,50 @@ function montarEstudioUI(container, arquivoInicial) {
       }
       const idx = draggingInfo.idx;
       const el = layer.children[idx];
+      const modo = draggingInfo.mode;
+
+      // Um clique simples (sem arrastar de fato) passa por aqui também — sem isso, o próprio ato
+      // de clicar num item já dispararia um re-render assíncrono da camada inteira, o que atrapalha
+      // o duplo clique (o 2º clique pode cair no instante em que a camada está sendo reconstruída).
+      const semMovimento = modo === 'drag'
+        ? (parseFloat(el.style.left) === draggingInfo.initL && parseFloat(el.style.top) === draggingInfo.initT)
+        : (parseFloat(el.style.width) === draggingInfo.initW);
+      draggingInfo = null;
+      if (semMovimento) return;
+
       salvarEstado();
       const wCvs = cvsEditor.width, hCvs = cvsEditor.height;
-      itens[paginaAtualModal][idx].x = parseFloat(el.style.left) / wCvs;
-      itens[paginaAtualModal][idx].y = parseFloat(el.style.top) / hCvs;
-      itens[paginaAtualModal][idx].w = parseFloat(el.style.width) / wCvs;
-      itens[paginaAtualModal][idx].h = parseFloat(el.style.height) / hCvs;
-      draggingInfo = null;
+      const item = itensTexto[paginaAtualModal][idx];
+      item.x = parseFloat(el.style.left) / wCvs;
+      item.y = parseFloat(el.style.top) / hCvs;
+      item.w = parseFloat(el.style.width) / wCvs;
+
+      if (modo === 'resize') {
+        item._larguraManual = true;
+        recalcularCaixaTexto(item, false).then(renderizarItensEditor);
+      } else {
+        renderizarItensEditor();
+      }
     }
 
     layer.addEventListener('mousemove', doMove); layer.addEventListener('mouseup', doEnd); layer.addEventListener('mouseleave', doEnd);
-    layer.addEventListener('touchmove', doMove, {passive:false}); layer.addEventListener('touchend', doEnd); layer.addEventListener('click', doEnd);
+    layer.addEventListener('touchmove', doMove, { passive: false }); layer.addEventListener('touchend', doEnd); layer.addEventListener('click', doEnd);
 
+    // --- DESFAZER ---
     function salvarEstado() {
-      historico.push(JSON.stringify(itens));
+      historico.push(JSON.stringify({ tracos, itensTexto }));
       if (historico.length > 20) historico.shift();
     }
 
     container.querySelector('#btn-est-desfazer').onclick = () => {
       if (historico.length > 1) {
         historico.pop();
-        itens = JSON.parse(historico[historico.length - 1]);
+        const estado = JSON.parse(historico[historico.length - 1]);
+        tracos = estado.tracos; itensTexto = estado.itensTexto;
+        idxEditando = null;
+        redesenharTracos();
         renderizarItensEditor();
       }
-    };
-
-    container.querySelector('#btn-est-fechar').onclick = () => {
-      modalEditor.style.display = 'none';
-      atualizarBadges();
     };
 
     document.addEventListener('keydown', (e) => {
@@ -568,11 +861,43 @@ function montarEstudioUI(container, arquivoInicial) {
       }
     });
 
+    container.querySelector('#btn-est-fechar').onclick = () => {
+      if (document.fullscreenElement === modalEditor) document.exitFullscreen().catch(() => {});
+      modalEditor.style.display = 'none';
+      atualizarBadges();
+    };
+
+    // --- TELA CHEIA (igual player de vídeo — usa a Fullscreen API, com fallback silencioso já
+    // que o modal, mesmo fora da API, já cobre 100% da viewport via CSS) ---
+    const btnFullscreen = container.querySelector('#btn-est-fullscreen');
+    btnFullscreen.onclick = async () => {
+      try {
+        if (!document.fullscreenElement) {
+          if (modalEditor.requestFullscreen) await modalEditor.requestFullscreen();
+          else throw new Error('sem suporte');
+        } else {
+          await document.exitFullscreen();
+        }
+      } catch (e) {
+        PDFTools.UI.mostrarToast('Tela cheia não disponível neste navegador.', 'info');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', () => {
+      const emTelaCheia = document.fullscreenElement === modalEditor;
+      btnFullscreen.textContent = emTelaCheia ? '⤡ Sair da Tela Cheia' : '⛶ Tela Cheia';
+      if (!paginaPdfAtual) return;
+      const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
+      escalaBase = calcularEscalaAjuste(viewportRef, emTelaCheia ? 3 : 1.5);
+      renderizarPaginaNoCanvas(controleZoom.obterZoom());
+    });
+
     // --- GERAR PDF ---
     container.querySelector('#btn-gerar').onclick = async () => {
-      const total = Object.values(itens).flat().length;
-      if (total === 0) {
-        return alert('Você ainda não incluiu nada no documento.\n\nComo fazer:\n1. Clique em uma das páginas.\n2. No editor que abrir, clique em "✏️ Lápis" ou "📝 Caixa de Texto" e posicione onde desejar.\n3. Clique em "Concluir Página" e depois em "Gerar PDF Editado".');
+      const totalTracos = Object.values(tracos).flat().length;
+      const totalTextos = Object.values(itensTexto).flat().length;
+      if (totalTracos + totalTextos === 0) {
+        return alert('Você ainda não incluiu nada no documento.\n\nComo fazer:\n1. Clique em uma das páginas.\n2. No editor que abrir, escolha "✏️ Lápis" (desenhe direto na página) ou "📝 Texto" (clique onde quer escrever).\n3. Clique em "Concluir Página" e depois em "Gerar PDF Editado".');
       }
 
       const btn = container.querySelector('#btn-gerar');
@@ -580,7 +905,7 @@ function montarEstudioUI(container, arquivoInicial) {
       try {
         await PDFTools.carregarLib('pdf-lib');
 
-        const blob = await aplicarItensNoPdf(fileOrig, itens, (pct, txt) => progresso.atualizar(pct, txt));
+        const blob = await aplicarEdicoesEstudio(fileOrig, tracos, itensTexto, (pct, txt) => progresso.atualizar(pct, txt));
         PDFTools.UI.mostrarToast('PDF editado com sucesso!', 'sucesso');
         const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-editado.pdf';
         PDFTools.baixar(blob, nome);
@@ -611,80 +936,152 @@ function montarEstudioUI(container, arquivoInicial) {
 PDFTools.registrar({
   id: 'estudio_principal',
   nome: 'Pequenas Edições',
-  descricao: 'Escreva à mão livre ou inclua uma caixa de texto em qualquer página — pequenas edições e inclusões, sem precisar de outra ferramenta.',
+  descricao: 'Desenhe à mão livre ou inclua uma caixa de texto direto sobre a página — pequenas edições, sem precisar de outra ferramenta.',
   precisa: ['pdf-lib', 'pdfjs'],
   montarUI: (container, arquivoInicial) => montarEstudioUI(container, arquivoInicial)
 });
 
-// --- LÓGICA PURA ---
+// --- LÓGICA PURA (exportação) ---
 
-async function aplicarItensNoPdf(fileOrig, itensMap, aoProgredir) {
+// Mesma convenção de contra-rotação usada nas outras ferramentas (Assinar, Tarjar): a tela
+// mostra a página já rotacionada (pdf.js aplica /Rotate sozinho); pontos e caixas guardados são
+// fracionários (0-1) relativos a essa visão visual, então cada um precisa ser reconvertido pra
+// coordenada bruta (não rotacionada) do PDF antes de desenhar.
+function nomeFonteVarianteGlobal(familia, negrito, italico) {
+  const mapa = {
+    helvetica: { r: 'Helvetica', b: 'HelveticaBold', i: 'HelveticaOblique', bi: 'HelveticaBoldOblique' },
+    times: { r: 'TimesRoman', b: 'TimesRomanBold', i: 'TimesRomanItalic', bi: 'TimesRomanBoldItalic' },
+    courier: { r: 'Courier', b: 'CourierBold', i: 'CourierOblique', bi: 'CourierBoldOblique' }
+  };
+  const g = mapa[familia] || mapa.helvetica;
+  if (negrito && italico) return g.bi;
+  if (negrito) return g.b;
+  if (italico) return g.i;
+  return g.r;
+}
+
+function hexParaRgbFracaoGlobal(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return { r: 0, g: 0, b: 0 };
+  return { r: parseInt(m[1], 16) / 255, g: parseInt(m[2], 16) / 255, b: parseInt(m[3], 16) / 255 };
+}
+
+function quebrarTextoEmLinhasGlobal(font, texto, tamanhoPt, larguraMaxPt) {
+  const linhasFinais = [];
+  const paragrafos = (texto || '').split('\n');
+  for (const paragrafo of paragrafos) {
+    if (paragrafo === '') { linhasFinais.push(''); continue; }
+    const palavras = paragrafo.split(' ');
+    let linhaAtual = '';
+    for (const palavra of palavras) {
+      const tentativa = linhaAtual ? linhaAtual + ' ' + palavra : palavra;
+      if (!linhaAtual || font.widthOfTextAtSize(tentativa, tamanhoPt) <= larguraMaxPt) {
+        linhaAtual = tentativa;
+      } else {
+        linhasFinais.push(linhaAtual);
+        linhaAtual = palavra;
+      }
+    }
+    linhasFinais.push(linhaAtual);
+  }
+  return linhasFinais;
+}
+
+function encontrarCaractereNaoSuportadoGlobal(font, texto) {
+  for (const ch of texto) {
+    if (ch === '\n') continue;
+    try { font.widthOfTextAtSize(ch, 10); } catch (e) { return ch; }
+  }
+  return null;
+}
+
+function desenharTracoNoPdf(page, traco, rawW, rawH, angulo) {
+  const R = (angulo % 360 + 360) % 360;
+  const { rgb, LineCapStyle } = window.PDFLib;
+  const { width: visW, height: visH } = PDFTools.dimensoesVisuais(rawW, rawH, R);
+  const cor = hexParaRgbFracaoGlobal(traco.corHex);
+
+  const pontosRaw = traco.pontosNorm.map(p => {
+    const visX = p.x * visW, visYTopo = p.y * visH;
+    const t = PDFTools.posicaoRotacionada(visX, visYTopo, 0, 0, rawW, rawH, R);
+    return { x: t.x, y: t.y };
+  });
+
+  for (let i = 0; i < pontosRaw.length - 1; i++) {
+    page.drawLine({
+      start: pontosRaw[i],
+      end: pontosRaw[i + 1],
+      thickness: traco.larguraPt,
+      color: rgb(cor.r, cor.g, cor.b),
+      lineCap: LineCapStyle.Round
+    });
+  }
+}
+
+function desenharTextoMultilinhaNoPdf(page, item, font, rawW, rawH, angulo) {
+  const R = (angulo % 360 + 360) % 360;
+  const { degrees, rgb } = window.PDFLib;
+  const { width: visW, height: visH } = PDFTools.dimensoesVisuais(rawW, rawH, R);
+  const cor = hexParaRgbFracaoGlobal(item.corHex);
+
+  const larguraCaixaPt = item.w * visW;
+  const alturaLinhaPt = item.tamanhoPt * 1.25;
+  const linhas = quebrarTextoEmLinhasGlobal(font, item.val, item.tamanhoPt, larguraCaixaPt);
+
+  const visX = item.x * visW;
+  const visYTopoCaixa = item.y * visH;
+
+  linhas.forEach((linha, i) => {
+    if (!linha) return;
+    const visYTopoLinha = visYTopoCaixa + i * alturaLinhaPt;
+    const t = PDFTools.posicaoRotacionada(visX, visYTopoLinha, larguraCaixaPt, alturaLinhaPt, rawW, rawH, R);
+    page.drawText(linha, {
+      x: t.x, y: t.y + (item.tamanhoPt * 0.2),
+      size: item.tamanhoPt,
+      font,
+      color: rgb(cor.r, cor.g, cor.b),
+      rotate: degrees(t.rotate)
+    });
+  });
+}
+
+async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, aoProgredir) {
   const buffer = await PDFTools.lerComoArrayBuffer(fileOrig);
-  const { PDFDocument, StandardFonts, rgb, degrees } = window.PDFLib;
-
+  const { PDFDocument, StandardFonts } = window.PDFLib;
   const novoDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
   const numPages = novoDoc.getPageCount();
-  const font = await novoDoc.embedFont(StandardFonts.Helvetica);
 
-  // Cache de imagens embutidas para não embutir o mesmo PNG várias vezes e inchar o PDF
-  const imgCache = {};
+  // Embute só as variantes de fonte realmente usadas no documento.
+  const nomesUsados = new Set();
+  Object.values(itensTextoMap).flat().forEach(it => nomesUsados.add(nomeFonteVarianteGlobal(it.familia, it.negrito, it.italico)));
+  const fontesEmbutidas = {};
+  for (const nome of nomesUsados) fontesEmbutidas[nome] = await novoDoc.embedFont(StandardFonts[nome]);
 
   for (let i = 0; i < numPages; i++) {
     aoProgredir((i / numPages) * 100, `Processando página ${i + 1} de ${numPages}...`);
     await new Promise(r => setTimeout(r, 0));
 
-    const lista = itensMap[i];
     const page = novoDoc.getPage(i);
+    const rawSize = page.getSize();
+    const anguloOriginal = page.getRotation().angle;
 
-    if (lista && lista.length > 0) {
-      // page.getSize() retorna sempre as dimensões BRUTAS do MediaBox (não muda com /Rotate).
-      const rawSize = page.getSize();
-      const anguloOriginal = page.getRotation().angle;
+    const listaTracos = tracosMap[i] || [];
+    listaTracos.forEach(tr => desenharTracoNoPdf(page, tr, rawSize.width, rawSize.height, anguloOriginal));
 
-      for (const item of lista) {
-        if (item.tipo === 'img') {
-          if (!imgCache[item.val]) imgCache[item.val] = await novoDoc.embedPng(item.val);
-          const pdfImg = imgCache[item.val];
-          desenharRotacionado(page, pdfImg, null, item.x, item.y, item.w, item.h, rawSize.width, rawSize.height, anguloOriginal);
-        } else {
-          desenharRotacionado(page, null, { txt: item.val, font, color: rgb(0,0,0) }, item.x, item.y, item.w, item.h, rawSize.width, rawSize.height, anguloOriginal);
-        }
+    const listaTextos = itensTextoMap[i] || [];
+    for (const item of listaTextos) {
+      if (!item.val) continue;
+      const font = fontesEmbutidas[nomeFonteVarianteGlobal(item.familia, item.negrito, item.italico)];
+      const charRuim = encontrarCaractereNaoSuportadoGlobal(font, item.val);
+      if (charRuim) {
+        throw new Error(`O texto da página ${i + 1} contém o caractere "${charRuim}", que não é suportado pela fonte escolhida. Remova esse caractere ou troque a fonte antes de gerar o PDF.`);
       }
+      desenharTextoMultilinhaNoPdf(page, item, font, rawSize.width, rawSize.height, anguloOriginal);
     }
   }
 
   aoProgredir(99, 'Salvando...');
   await new Promise(r => setTimeout(r, 0));
-
   const outBytes = await novoDoc.save({ useObjectStreams: true });
   return new Blob([outBytes], { type: 'application/pdf' });
-}
-
-// Contra-rotação para PDFLib. A tela visualiza a página já rotacionada (o canvas do editor vem
-// do pdf.js, que já leva /Rotate em conta). As caixas são percentuais relativas a essa visão
-// visual — aqui convertemos para a coordenada bruta (não rotacionada) do PDF.
-function desenharRotacionado(page, imgObj, txtObj, pctX, pctY, pctW, pctH, rawW, rawH, angulo) {
-  const R = (angulo % 360 + 360) % 360;
-  const { degrees } = window.PDFLib;
-  const { width: visW, height: visH } = PDFTools.dimensoesVisuais(rawW, rawH, R);
-
-  const visX = pctX * visW;
-  const visYTopo = pctY * visH;
-  const boxW = pctW * visW;
-  const boxH = pctH * visH;
-
-  const t = PDFTools.posicaoRotacionada(visX, visYTopo, boxW, boxH, rawW, rawH, R);
-
-  if (imgObj) {
-    page.drawImage(imgObj, { x: t.x, y: t.y, width: t.width, height: t.height, rotate: degrees(t.rotate) });
-  } else if (txtObj) {
-    const fontSize = boxH * 0.8;
-    page.drawText(txtObj.txt, {
-      x: t.x, y: t.y + (fontSize * 0.2),
-      size: fontSize,
-      font: txtObj.font,
-      color: txtObj.color,
-      rotate: degrees(t.rotate)
-    });
-  }
 }

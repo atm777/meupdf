@@ -1,11 +1,10 @@
 // Motor compartilhado de edição de páginas, sempre focado em UMA tarefa por vez.
-// Registrado como várias ferramentas separadas mais abaixo (Girar, Remover, Extrair,
-// Reordenar, Recortar Margens, Dividir por Quantidade, Dividir por Tamanho), cada uma com
+// Registrado como ferramentas separadas mais abaixo (hoje só "Dividir PDF"), cada uma com
 // seu próprio botão na tela inicial — em vez de um único "Organizar Páginas" com tudo junto.
 function montarOrganizarUI(container, foco, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
-    let plano = []; // Estado atual: [{ id, originalIndex, rotation, cropBox, selecionado }]
+    let plano = []; // Estado atual: [{ id, originalIndex, rotation, selecionado }]
     let historico = [];
     let visaoObserver = null;
     let nomeOriginal = 'documento';
@@ -36,12 +35,11 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
         .org-grupo-opcoes label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; }
         .org-badge-remover { position: absolute; top: -8px; right: -8px; background: var(--cor-erro); color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; border: none; cursor: pointer; display: none; }
         .org-pagina:hover .org-badge-remover { display: block; }
-        .org-aviso-crop { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(25, 135, 84, 0.8); color: white; font-size: 10px; text-align: center; padding: 2px; }
       `;
       document.head.appendChild(style);
     }
 
-    const mostrarEdicao = foco.mostrarGirar || foco.mostrarRemover || foco.mostrarRecortar;
+    const mostrarEdicao = foco.mostrarGirar || foco.mostrarRemover;
 
     const painelEdicaoHTML = mostrarEdicao ? `
       <div class="org-painel">
@@ -51,10 +49,9 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
           <button class="org-btn" style="flex:1;" id="btn-girar-esq" title="Girar Anti-horário">↺ Girar Esq</button>
           <button class="org-btn" style="flex:1;" id="btn-girar-dir" title="Girar Horário">↻ Girar Dir</button>
         </div>` : ''}
-        ${(foco.mostrarRemover || foco.mostrarRecortar) ? `
+        ${foco.mostrarRemover ? `
         <div style="display:flex; gap:8px; margin-bottom:12px;">
-          ${foco.mostrarRemover ? `<button class="org-btn" style="flex:1; color:var(--cor-erro);" id="btn-remover">🗑️ Remover</button>` : ''}
-          ${foco.mostrarRecortar ? `<button class="org-btn" style="flex:1;" id="btn-recortar">✂️ Recortar</button>` : ''}
+          <button class="org-btn" style="flex:1; color:var(--cor-erro);" id="btn-remover">🗑️ Remover</button>
         </div>` : ''}
         <button class="org-btn" id="btn-desfazer" style="width:100%; margin-bottom:16px;" disabled>↩️ Desfazer (Ctrl+Z)</button>
         <div style="font-size:12px; color: var(--texto-2); text-align:center;">Dica: Arraste as páginas para reordenar.</div>
@@ -209,7 +206,6 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
             id: 'p' + Math.random().toString(36).substr(2, 6),
             originalIndex: i,
             rotation: 0,
-            cropBox: null,
             selecionado: false
           });
         }
@@ -345,7 +341,6 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
             <div class="thumb-placeholder">${p.originalIndex + 1}</div>
           </div>
           <button class="org-badge-remover" title="Remover página">✕</button>
-          ${p.cropBox ? '<div class="org-aviso-crop">Recortada</div>' : ''}
         `;
 
         if (foco.mostrarSelecao) {
@@ -554,62 +549,6 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
       };
     }
 
-    // Recortar Margens (Auto-detect)
-    if (foco.mostrarRecortar) {
-      container.querySelector('#btn-recortar').onclick = async () => {
-        const idxSel = plano.findIndex(p => p.selecionado);
-        if (idxSel === -1) return PDFTools.UI.mostrarToast('Selecione uma página para basear a detecção de margens.', 'info');
-
-        const pBase = plano[idxSel];
-        PDFTools.UI.mostrarToast('Analisando pixels da página para detectar margens. Aguarde...', 'info');
-
-        try {
-          const page = await pdfDocJs.getPage(pBase.originalIndex + 1);
-          const viewport = page.getViewport({ scale: 1.0 }); // 72 DPI (mesmo de pdf-lib)
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width; canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
-          await page.render({ canvasContext: ctx, viewport }).promise;
-
-          const imgData = ctx.getImageData(0,0, canvas.width, canvas.height).data;
-          let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
-
-          for(let y=0; y<canvas.height; y++) {
-            for(let x=0; x<canvas.width; x++) {
-               const idx = (y * canvas.width + x) * 4;
-               if (imgData[idx+3] > 50 && (imgData[idx] < 245 || imgData[idx+1] < 245 || imgData[idx+2] < 245)) {
-                  if (x < minX) minX = x;
-                  if (x > maxX) maxX = x;
-                  if (y < minY) minY = y;
-                  if (y > maxY) maxY = y;
-               }
-            }
-          }
-
-          const padding = 20; // folga visual
-          const cb = {
-            xLeft: Math.max(0, minX - padding),
-            yBottom: Math.max(0, canvas.height - (maxY + padding)),
-            xRight: Math.min(canvas.width, maxX + padding),
-            yTop: Math.min(canvas.height, canvas.height - minY + padding)
-          };
-
-          if (confirm('Margens detectadas! Aplicar este recorte a todas as páginas selecionadas (ou todas se apenas esta estiver selecionada)?')) {
-            salvarEstado();
-            const applyToAll = plano.filter(p => p.selecionado).length <= 1;
-            plano.forEach(p => {
-              if (applyToAll || p.selecionado) p.cropBox = cb;
-            });
-            renderizarGrade();
-            PDFTools.UI.mostrarToast('Recorte aplicado. Será efetivado ao salvar.', 'sucesso');
-          }
-        } catch (e) {
-          console.error(e);
-          PDFTools.UI.mostrarToast('Falha ao analisar a página.', 'erro');
-        }
-      };
-    }
-
     // --- AÇÃO FINAL ---
     container.querySelector('#btn-gerar').onclick = async () => {
       let acao = obterAcaoAtual();
@@ -688,17 +627,9 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
 
 const FOCOS_ORGANIZAR = [
   {
-    id: 'recortar_margens', nome: 'Recortar Margens',
-    descricao: 'Detecte e remova margens em branco automaticamente.',
-    explicacao: 'A ferramenta analisa os pixels de uma página e descobre automaticamente onde termina o espaço em branco ao redor do conteúdo (texto, imagens, tabelas). Selecione a página que representa melhor o padrão do documento, clique em "✂️ Recortar" e o corte detectado é aplicado a ela — ou a todas as páginas selecionadas, se você marcar mais de uma antes de clicar. Use quando o PDF tiver margens grandes demais (por exemplo, de um scanner) e você quiser aproveitar melhor o espaço da página.',
-    mostrarSelecao: true, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: true,
-    acaoFixa: 'juntar', labelBotao: 'Salvar PDF Recortado', sufixoArquivo: '-recortado',
-    paramLabel: null, paramValor: null, mostrarProximosPassos: true, acaoSessaoTexto: 'Recortou margens'
-  },
-  {
     id: 'dividir_pdf', nome: 'Dividir PDF',
     descricao: 'Divida o PDF em vários arquivos menores — por quantidade de páginas ou por tamanho máximo em MB.',
-    mostrarSelecao: false, mostrarGirar: false, mostrarRemover: false, mostrarRecortar: false,
+    mostrarSelecao: false, mostrarGirar: false, mostrarRemover: false,
     mostrarEscolhaDivisao: true,
     acaoFixa: null, labelBotao: 'Dividir e Baixar', sufixoArquivo: '-parte',
     paramLabel: null, paramValor: null
@@ -826,9 +757,5 @@ function aplicarTransformacoes(page, pData, degreesFn) {
   if (pData.rotation) {
     const curRot = page.getRotation().angle;
     page.setRotation(degreesFn(curRot + pData.rotation));
-  }
-  if (pData.cropBox) {
-    const cb = pData.cropBox;
-    page.setCropBox(cb.xLeft, cb.yBottom, cb.xRight, cb.yTop);
   }
 }
