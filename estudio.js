@@ -42,7 +42,7 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
         .est-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 24px; overflow: auto; position: relative; }
 
-        .est-editor-wrapper { position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; background: var(--sup); }
+        .est-editor-wrapper { position: relative; isolation: isolate; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; background: var(--sup); }
         .est-editor-canvas { display: block; }
         .est-editor-layer-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         .est-editor-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -50,8 +50,8 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-item-arrastavel { position: absolute; border: 1px dashed transparent; cursor: move; pointer-events: auto; }
         .est-item-arrastavel:hover, .est-item-arrastavel.ativo { border-color: var(--cor-primaria); background: rgba(0, 123, 255, 0.05); }
         .est-item-arrastavel .txt { width: 100%; height: 100%; overflow: hidden; white-space: pre; pointer-events: none; }
-        .est-item-arrastavel .marca-fill { width: 100%; height: 100%; opacity: 0.4; pointer-events: none; }
-        .est-marca-temp { position: absolute; opacity: 0.4; pointer-events: none; }
+        .est-item-arrastavel .marca-fill { width: 100%; height: 100%; mix-blend-mode: multiply; pointer-events: none; }
+        .est-marca-temp { position: absolute; mix-blend-mode: multiply; pointer-events: none; }
 
         .est-resize-handle { position: absolute; bottom: -5px; right: -5px; width: 14px; height: 14px; background: var(--cor-primaria); border-radius: 50%; cursor: se-resize; display: none; }
         .est-item-arrastavel.ativo .est-resize-handle { display: block; }
@@ -1206,12 +1206,18 @@ function desenharMarcaNoPdf(page, item, rawW, rawH, angulo) {
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
 
-  page.drawRectangle({
+  // Marca-texto de verdade se comporta como tinta translúcida: o preto do texto continua preto
+  // e só o fundo branco fica amarelo. Isso é o modo de mesclagem "Multiply" (multiplicação de
+  // canais), não opacidade — opacidade clareia o texto junto com o fundo, deixando tudo oliva.
+  const opcoesRet = {
     x: minX, y: minY,
     width: maxX - minX, height: maxY - minY,
-    color: rgb(cor.r, cor.g, cor.b),
-    opacity: 0.4
-  });
+    color: rgb(cor.r, cor.g, cor.b)
+  };
+  const BlendMode = window.PDFLib.BlendMode;
+  if (BlendMode && BlendMode.Multiply) opcoesRet.blendMode = BlendMode.Multiply;
+  else opcoesRet.opacity = 0.4; // fallback caso a versão do pdf-lib não suporte mesclagem
+  page.drawRectangle(opcoesRet);
 }
 
 function desenharTextoMultilinhaNoPdf(page, item, font, rawW, rawH, angulo) {
