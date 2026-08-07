@@ -118,7 +118,12 @@ PDFTools.registrar({
     }, { rootMargin: '200px' });
 
     async function abrirArquivo(file) {
-      if (file.type !== 'application/pdf') return;
+      // Valida pelo header %PDF (ehPDF), não pelo file.type — um .pdf pode chegar com MIME vazio
+      // ou não-padrão (compartilhar/arrastar), e antes isso era ignorado em silêncio.
+      if (!(await PDFTools.ehPDF(file))) {
+        container.querySelector('#tj-tela-inicial').innerHTML = PDFTools.erro('nao_e_pdf');
+        return;
+      }
       fileOrig = file;
       container.querySelector('#tj-tela-inicial').innerHTML = '<div style="text-align:center; padding: 40px; color: var(--texto-2);">Preparando documento...</div>';
       
@@ -374,12 +379,13 @@ PDFTools.registrar({
       atualizarBadgesNaGrade();
     };
 
-    // Teclado
-    document.addEventListener('keydown', (e) => {
+    // Teclado (referência nomeada pra poder remover no cleanup)
+    function aoTecladoTarjar(e) {
       if (modal.style.display === 'flex' && e.ctrlKey && e.key === 'z') {
         container.querySelector('#btn-tj-desfazer').click();
       }
-    });
+    }
+    document.addEventListener('keydown', aoTecladoTarjar);
 
     // --- GERAR ---
     container.querySelector('#btn-gerar').onclick = async () => {
@@ -425,6 +431,12 @@ PDFTools.registrar({
     };
 
     if (arquivoInicial) abrirArquivo(arquivoInicial);
+
+    // Cleanup chamado por index.html ao trocar de ferramenta ou voltar pra home.
+    return function limparTarjar() {
+      document.removeEventListener('keydown', aoTecladoTarjar);
+      try { visaoObserver.disconnect(); } catch (e) {}
+    };
   }
 });
 

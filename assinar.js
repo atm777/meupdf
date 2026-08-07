@@ -849,6 +849,17 @@ PDFTools.registrar({
     };
 
     if (arquivoInicial) abrirArquivo(arquivoInicial);
+
+    // Cleanup chamado por index.html ao trocar de ferramenta ou voltar pra home: remove os
+    // listeners que ficam no `document` (mesmas referências, sem bind novo) e desliga o
+    // observer de miniaturas, pra não acumularem a cada nova abertura da ferramenta.
+    return function limparAssinar() {
+      document.removeEventListener('mousemove', doMove);
+      document.removeEventListener('mouseup', doEnd);
+      document.removeEventListener('touchmove', doMove);
+      document.removeEventListener('touchend', doEnd);
+      try { visaoObserver.disconnect(); } catch (e) {}
+    };
   }
 });
 

@@ -188,7 +188,12 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
     }, { rootMargin: '200px' });
 
     async function abrirArquivo(file) {
-      if (file.type !== 'application/pdf') return;
+      // Valida pelo header %PDF (ehPDF), não pelo file.type — um .pdf pode chegar com MIME vazio
+      // ou não-padrão (compartilhar/arrastar), e antes isso era ignorado em silêncio.
+      if (!(await PDFTools.ehPDF(file))) {
+        telaInicial.innerHTML = PDFTools.erro('nao_e_pdf');
+        return;
+      }
       fileOrig = file;
       nomeOriginal = PDFTools.nomeSemExtensao(file.name);
 
@@ -309,11 +314,12 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
     }
 
 
-    document.addEventListener('keydown', (e) => {
+    function aoTecladoOrganizar(e) {
       if (e.ctrlKey && e.key === 'z' && telaTrabalho.style.display !== 'none') {
         container.querySelector('#btn-desfazer').click();
       }
-    });
+    }
+    document.addEventListener('keydown', aoTecladoOrganizar);
 
     let lastSelectedIndex = null;
     let draggedIdx = null;
@@ -621,6 +627,12 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
     };
 
     if (arquivoInicial) abrirArquivo(arquivoInicial);
+
+    // Cleanup chamado por index.html ao trocar de ferramenta ou voltar pra home.
+    return function limparOrganizar() {
+      document.removeEventListener('keydown', aoTecladoOrganizar);
+      try { if (visaoObserver) visaoObserver.disconnect(); } catch (e) {}
+    };
 }
 
 // --- REGISTRO: um botão por tarefa humana, todos usando o mesmo motor acima ---

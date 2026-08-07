@@ -236,8 +236,11 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
         
         gerarPreview();
       } catch (e) {
-        if (e.message && e.message.includes('encrypted')) container.querySelector('#cr-tela-inicial').innerHTML = PDFTools.erro('pdf_protegido');
-        else container.querySelector('#cr-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido');
+        console.error(e);
+        const protegido = e.name === 'PasswordException' || (e.message && /encrypt|senha|password/i.test(e.message));
+        container.querySelector('#cr-tela-inicial').innerHTML = protegido
+          ? PDFTools.erro('pdf_protegido')
+          : PDFTools.erro('pdf_corrompido', e.message);
       }
     }
 

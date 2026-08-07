@@ -119,15 +119,6 @@ PDFTools.registrar({
     colDir.innerHTML = `
       <div class="opcoes-grupo">
         <label>
-          <input type="checkbox" id="opt-marcadores" checked>
-          <div>
-            <strong>Preservar marcadores</strong>
-            <span class="dica">Mantém o índice de cada arquivo original (quando possível).</span>
-          </div>
-        </label>
-      </div>
-      <div class="opcoes-grupo">
-        <label>
           <input type="checkbox" id="opt-branco">
           <div>
             <strong>Página em branco</strong>
@@ -173,7 +164,6 @@ PDFTools.registrar({
         await PDFTools.carregarLib('pdf-lib');
         
         const opcoes = {
-          marcadores: document.getElementById('opt-marcadores').checked,
           paginaEmBranco: document.getElementById('opt-branco').checked,
           limparMetadados: document.getElementById('opt-metadados').checked
         };
@@ -227,9 +217,11 @@ PDFTools.registrar({
         if (err.message.includes('protegido por senha')) codErro = 'pdf_protegido';
         else if (err.message.includes('corrompido')) codErro = 'pdf_corrompido';
 
+        // Toast é texto simples: usa a mensagem amigável do catálogo (sem os detalhes técnicos,
+        // que já foram para o console.error acima).
         const el = document.createElement('div');
-        el.innerHTML = PDFTools.erro(codErro, err.message);
-        PDFTools.UI.mostrarToast(el.innerHTML, 'erro');
+        el.innerHTML = PDFTools.erro(codErro);
+        PDFTools.UI.mostrarToast(el.textContent, 'erro');
       } finally {
         progresso.esconder();
         btnGerar.disabled = false;
@@ -282,7 +274,7 @@ PDFTools.registrar({
         el.innerHTML = `
           <div class="pdf-item-icone">📄</div>
           <div class="pdf-item-info">
-            <div class="pdf-item-title" title="${PDFTools.sanitizarNome(item.file.name)}">${PDFTools.sanitizarNome(item.file.name)}</div>
+            <div class="pdf-item-title"></div>
             <div class="pdf-item-meta">${PDFTools.formatarTamanho(item.file.size)} • ${txtPaginas}</div>
           </div>
           <div class="pdf-acoes">
@@ -291,6 +283,11 @@ PDFTools.registrar({
             <button class="del" aria-label="Remover">✕</button>
           </div>
         `;
+        // Nome exibido via textContent: preserva acentos ("Relatório Anual.pdf") e é seguro
+        // contra HTML no nome do arquivo. sanitizarNome continua valendo só para o nome do download.
+        const tituloEl = el.querySelector('.pdf-item-title');
+        tituloEl.textContent = item.file.name;
+        tituloEl.title = item.file.name;
 
         el.querySelector('.btn-up').onclick = () => moverItem(index, -1);
         el.querySelector('.btn-down').onclick = () => moverItem(index, 1);

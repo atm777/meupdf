@@ -130,9 +130,20 @@ PDFTools.registrar({
     inputQ.addEventListener('input', () => lblQ.textContent = inputQ.value + '%');
 
     async function abrirArquivo(file) {
-      if (file.type !== 'application/pdf') return;
+      // Valida pelo header %PDF (ehPDF), não pelo file.type — um .pdf pode chegar com MIME vazio
+      // ou não-padrão. Mantém a dropzone visível para tentar outro arquivo.
+      const boxErroAntigo = container.querySelector('#comp-erro-arquivo');
+      if (boxErroAntigo) boxErroAntigo.remove();
+      if (!(await PDFTools.ehPDF(file))) {
+        const box = document.createElement('div');
+        box.id = 'comp-erro-arquivo';
+        box.style.marginTop = '12px';
+        box.innerHTML = PDFTools.erro('nao_e_pdf');
+        container.querySelector('#comp-dropzone').appendChild(box);
+        return;
+      }
       fileOrig = file;
-      
+
       container.querySelector('#comp-dropzone').style.display = 'none';
       container.querySelector('#comp-info').style.display = 'block';
       container.querySelector('#comp-nome-arq').textContent = file.name;
@@ -404,25 +415,21 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
              try {
                let imgBytes = pdfObject.contents;
                
-               // Se tem FlateDecode antes do DCTDecode, descomprime a camada Flate
+               // Se tem FlateDecode antes do DCTDecode, descomprime a camada Flate usando o
+               // DecompressionStream nativo do navegador. Sem ele, NÃO buscamos nenhuma
+               // biblioteca externa (o app não faz requisição de rede durante o uso, por
+               // privacidade e para poder funcionar sem depender de CDN): apenas pulamos esta
+               // imagem, mantendo a original intacta (degradação graciosa; a imagem entra na
+               // contagem de "não tratadas" mais abaixo).
                if (filtrosStr[0] === 'FlateDecode') {
-                  if (window.DecompressionStream) {
-                    const ds = new DecompressionStream('deflate');
-                    const writer = ds.writable.getWriter();
-                    const writePromise = writer.write(imgBytes).then(() => writer.close());
-                    const res = new Response(ds.readable);
-                    const bufPromise = res.arrayBuffer();
-                    await writePromise;
-                    imgBytes = new Uint8Array(await bufPromise);
-                 } else {
-                   if (!window.fflate) {
-                     const script = document.createElement('script');
-                     script.src = 'https://unpkg.com/fflate@0.8.2/umd/index.js';
-                     document.head.appendChild(script);
-                     await new Promise(r => script.onload = r);
-                   }
-                   imgBytes = window.fflate.unzlibSync(imgBytes);
-                 }
+                  if (!window.DecompressionStream) continue;
+                  const ds = new DecompressionStream('deflate');
+                  const writer = ds.writable.getWriter();
+                  const writePromise = writer.write(imgBytes).then(() => writer.close());
+                  const res = new Response(ds.readable);
+                  const bufPromise = res.arrayBuffer();
+                  await writePromise;
+                  imgBytes = new Uint8Array(await bufPromise);
                }
 
                const resJpg = await recomprimirJpeg(imgBytes, q);

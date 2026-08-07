@@ -1020,11 +1020,12 @@ function montarEstudioUI(container, arquivoInicial) {
       }
     };
 
-    document.addEventListener('keydown', (e) => {
+    function aoTecladoEstudio(e) {
       if (e.ctrlKey && e.key === 'z' && modalEditor.style.display !== 'none') {
         container.querySelector('#btn-est-desfazer').click();
       }
-    });
+    }
+    document.addEventListener('keydown', aoTecladoEstudio);
 
     container.querySelector('#btn-est-fechar').onclick = () => {
       if (document.fullscreenElement === modalEditor) document.exitFullscreen().catch(() => {});
@@ -1048,14 +1049,15 @@ function montarEstudioUI(container, arquivoInicial) {
       }
     };
 
-    document.addEventListener('fullscreenchange', () => {
+    function aoMudarFullscreenEstudio() {
       const emTelaCheia = document.fullscreenElement === modalEditor;
       btnFullscreen.textContent = emTelaCheia ? '⤡ Sair da Tela Cheia' : '⛶ Tela Cheia';
       if (!paginaPdfAtual) return;
       const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
       escalaBase = calcularEscalaAjuste(viewportRef, emTelaCheia ? 3 : 1.5);
       renderizarPaginaNoCanvas(controleZoom.obterZoom());
-    });
+    }
+    document.addEventListener('fullscreenchange', aoMudarFullscreenEstudio);
 
     // --- GERAR PDF ---
     container.querySelector('#btn-gerar').onclick = async () => {
@@ -1096,6 +1098,18 @@ function montarEstudioUI(container, arquivoInicial) {
     };
 
     if (arquivoInicial) abrirArquivo(arquivoInicial);
+
+    // Cleanup chamado por index.html ao trocar de ferramenta ou voltar pra home: remove todos os
+    // listeners que ficam no `document` (mesmas referências) e desliga o observer de miniaturas.
+    return function limparEstudio() {
+      document.removeEventListener('mousemove', doMove);
+      document.removeEventListener('mouseup', doEnd);
+      document.removeEventListener('touchmove', doMove);
+      document.removeEventListener('touchend', doEnd);
+      document.removeEventListener('keydown', aoTecladoEstudio);
+      document.removeEventListener('fullscreenchange', aoMudarFullscreenEstudio);
+      try { visaoObserver.disconnect(); } catch (e) {}
+    };
 }
 
 PDFTools.registrar({

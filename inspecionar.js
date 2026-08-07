@@ -294,8 +294,11 @@ PDFTools.registrar({
         container.querySelector('#ip-tela-trabalho').style.display = 'block';
 
       } catch (e) {
-        if (e.message && e.message.includes('encrypted')) container.querySelector('#ip-tela-inicial').innerHTML = PDFTools.erro('pdf_protegido');
-        else container.querySelector('#ip-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido', e.message);
+        console.error(e);
+        const protegido = e.name === 'PasswordException' || (e.message && /encrypt|senha|password/i.test(e.message));
+        container.querySelector('#ip-tela-inicial').innerHTML = protegido
+          ? PDFTools.erro('pdf_protegido')
+          : PDFTools.erro('pdf_corrompido', e.message);
       }
     }
 

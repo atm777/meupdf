@@ -189,8 +189,8 @@ PDFTools.registrar({
       } catch (err) {
         console.error(err);
         const el = document.createElement('div');
-        el.innerHTML = PDFTools.erro('desconhecido', err.message);
-        PDFTools.UI.mostrarToast(el.innerHTML, 'erro');
+        el.innerHTML = PDFTools.erro('desconhecido');
+        PDFTools.UI.mostrarToast(el.textContent, 'erro');
       } finally {
         progresso.esconder();
         btnGerar.disabled = false;
@@ -228,14 +228,19 @@ PDFTools.registrar({
         el.draggable = true;
         
         el.innerHTML = `
-          <img src="${item.url}" class="img-thumb" alt="${PDFTools.sanitizarNome(item.file.name)}">
-          <div class="img-nome" title="${PDFTools.sanitizarNome(item.file.name)}">${PDFTools.sanitizarNome(item.file.name)}</div>
+          <img src="${item.url}" class="img-thumb" alt="">
+          <div class="img-nome"></div>
           <div class="img-acoes">
             <button class="btn-up" aria-label="Mover para cima">↑</button>
             <button class="del" aria-label="Remover">✕</button>
             <button class="btn-down" aria-label="Mover para baixo">↓</button>
           </div>
         `;
+        // Nome exibido via textContent: preserva acentos e é seguro contra HTML no nome.
+        const nomeEl = el.querySelector('.img-nome');
+        nomeEl.textContent = item.file.name;
+        nomeEl.title = item.file.name;
+        el.querySelector('.img-thumb').alt = item.file.name;
 
         el.querySelector('.btn-up').onclick = () => moverItem(index, -1);
         el.querySelector('.btn-down').onclick = () => moverItem(index, 1);
@@ -285,6 +290,14 @@ PDFTools.registrar({
         renderLista();
       }
     }
+
+    // Cleanup chamado por index.html ao sair da ferramenta: revoga os object URLs das miniaturas
+    // (antes só o botão de remover item individual revogava, então trocar de ferramenta ou voltar
+    // pra home deixava esses URLs pendurados na memória).
+    return function limparImagens() {
+      itens.forEach(it => { try { URL.revokeObjectURL(it.url); } catch (e) {} });
+      itens = [];
+    };
   }
 });
 
