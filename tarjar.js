@@ -202,6 +202,12 @@ PDFTools.registrar({
     const modal = container.querySelector('#tj-modal');
     const layer = container.querySelector('#tj-layer');
     const cvsEditor = container.querySelector('#tj-canvas');
+
+    // Acessibilidade do modal (foco preso, Esc fecha, foco devolvido). Ver Item 2.
+    const a11yTarjar = window.PDFTools.UI.tornarModalAcessivel(modal, {
+      rotulo: 'Editor de tarjas',
+      botaoFechar: () => container.querySelector('#btn-tj-fechar')
+    });
     let isDrawing = false;
     let startX=0, startY=0, currentRectTemp=null;
 
@@ -464,6 +470,7 @@ PDFTools.registrar({
       window.removeEventListener('resize', aoRedimensionarTarjar);
       window.removeEventListener('orientationchange', aoRedimensionarTarjar);
       document.body.classList.remove('pdf-editor-modal-aberto');
+      try { a11yTarjar.destruir(); } catch (e) {}
       try { visaoObserver.disconnect(); } catch (e) {}
     };
   }

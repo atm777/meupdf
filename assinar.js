@@ -601,6 +601,22 @@ PDFTools.registrar({
     const cvsEditor = container.querySelector('#as-canvas');
     let itemAtivo = null;
 
+    // Acessibilidade dos 3 modais do Assinar (editor de página + criar assinatura + desenho livre).
+    // O modal do topo da pilha é quem trata Esc/Tab, então os internos abrindo por cima do editor
+    // funcionam certo. Ver Item 2 / PDFTools.UI.tornarModalAcessivel.
+    const a11yEditor = window.PDFTools.UI.tornarModalAcessivel(modalEditor, {
+      rotulo: 'Editor de assinatura da página',
+      botaoFechar: () => container.querySelector('#btn-as-fechar')
+    });
+    const a11yCriar = window.PDFTools.UI.tornarModalAcessivel(container.querySelector('#as-modal-criar'), {
+      rotulo: 'Criar assinatura',
+      botaoFechar: () => container.querySelector('#btn-cancelar-cria')
+    });
+    const a11yDesenho = window.PDFTools.UI.tornarModalAcessivel(container.querySelector('#as-modal-desenho'), {
+      rotulo: 'Desenho livre',
+      botaoFechar: () => container.querySelector('#btn-cancelar-desenho')
+    });
+
     // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página;
     // o fator do controle de zoom multiplica em cima disso. Lupa/botões no desktop, pinça de
     // dois dedos no celular (ver criarControleZoom em ui.js).
@@ -888,6 +904,7 @@ PDFTools.registrar({
       window.removeEventListener('resize', aoRedimensionarAssinar);
       window.removeEventListener('orientationchange', aoRedimensionarAssinar);
       document.body.classList.remove('pdf-editor-modal-aberto');
+      try { a11yEditor.destruir(); a11yCriar.destruir(); a11yDesenho.destruir(); } catch (e) {}
       try { visaoObserver.disconnect(); } catch (e) {}
     };
   }

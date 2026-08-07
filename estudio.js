@@ -14,6 +14,10 @@ function montarEstudioUI(container, arquivoInicial) {
     //   arrastáveis/redimensionáveis/apagáveis, e dá pra reabrir pra editar com duplo clique.
     let tracos = {};
     let itensTexto = {};
+    // Giro por página (delta em graus, múltiplo de 90) aplicado POR CIMA da rotação original do
+    // arquivo (/Rotate). Estado por página, igual traços/itens: navegar e voltar preserva. Entra
+    // nos snapshots do histórico (Ctrl+Z desfaz o giro junto). Ver girarPagina() e a exportação.
+    let giros = {};
     let historico = [];
     let paginaAtualModal = 0;
 
@@ -72,8 +76,10 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-ferramentas-flutuante { position: absolute; top: 80px; left: 24px; background: var(--sup); padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 4px; z-index: 10; width: 220px; max-height: calc(100% - 100px); overflow-y: auto; }
 
         .est-modo-grupo { display: flex; gap: 4px; margin-bottom: 8px; }
-        .est-modo-btn { flex: 1; padding: 8px 2px; font-size: 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; color: var(--texto); }
+        .est-modo-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: 11px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; color: var(--texto); }
         .est-modo-btn.ativo { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
+        .est-modo-btn svg.pdf-icone { width: 18px; height: 18px; }
+        #btn-est-girar svg.pdf-icone { width: 16px; height: 16px; }
 
         .est-sub-painel { background: var(--sup-2); border-radius: 6px; padding: 10px; margin-bottom: 8px; }
         .est-campo-label { display: block; font-size: 11px; font-weight: bold; color: var(--texto-2); margin-bottom: 3px; }
@@ -90,6 +96,14 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-cor-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: 0 0 0 1px var(--borda); }
         .est-cor-swatch.ativo { border-color: var(--cor-primaria); }
         .est-cor-custom { width: 24px; height: 24px; border-radius: 50%; border: none; padding: 0; cursor: pointer; background: none; }
+
+        /* Respeita "reduzir movimento": neutraliza o "pulo" do hover do cartão de página. Fica
+           aqui (não só no style.css) porque este <style> é injetado em runtime e venceria a regra
+           global por ordem de cascata. */
+        @media (prefers-reduced-motion: reduce) {
+          .est-pagina { transition: none; }
+          .est-pagina:hover { transform: none; }
+        }
       `;
       document.head.appendChild(style);
     }
@@ -132,11 +146,15 @@ function montarEstudioUI(container, arquivoInicial) {
 
         <div class="est-ferramentas-flutuante">
           <div class="est-modo-grupo">
-            <button type="button" class="est-modo-btn ativo" data-modo="mover" title="Mover e editar itens">🖐️ Mover</button>
-            <button type="button" class="est-modo-btn" data-modo="lapis" title="Desenhar à mão livre">✏️ Lápis</button>
-            <button type="button" class="est-modo-btn" data-modo="texto" title="Incluir caixa de texto">📝 Texto</button>
-            <button type="button" class="est-modo-btn" data-modo="marca" title="Marcar texto (grifar)">🖍️ Marca</button>
+            <button type="button" class="est-modo-btn ativo" data-modo="mover" title="Mover e editar itens">${window.PDFTools.iconeSVG('ui-mover')} Mover</button>
+            <button type="button" class="est-modo-btn" data-modo="lapis" title="Desenhar à mão livre">${window.PDFTools.iconeSVG('ui-lapis')} Lápis</button>
+            <button type="button" class="est-modo-btn" data-modo="texto" title="Incluir caixa de texto">${window.PDFTools.iconeSVG('ui-texto')} Texto</button>
+            <button type="button" class="est-modo-btn" data-modo="marca" title="Marcar texto (grifar)">${window.PDFTools.iconeSVG('ui-marca')} Marca</button>
           </div>
+
+          <button type="button" class="est-btn" id="btn-est-girar" title="Girar a página 90° no sentido horário" style="display:flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-bottom:8px;">
+            ${window.PDFTools.iconeSVG('ui-girar')} Girar 90°
+          </button>
 
           <div class="est-sub-painel" id="est-painel-lapis" style="display:none;">
             <div class="est-desenho-grupo">
@@ -233,9 +251,9 @@ function montarEstudioUI(container, arquivoInicial) {
         pdfDocJs = await window.pdfjsLib.getDocument({ data: buffer }).promise;
         numPages = pdfDocJs.numPages;
 
-        tracos = {}; itensTexto = {};
-        for (let i = 0; i < numPages; i++) { tracos[i] = []; itensTexto[i] = []; }
-        historico = [JSON.stringify({ tracos, itensTexto })];
+        tracos = {}; itensTexto = {}; giros = {};
+        for (let i = 0; i < numPages; i++) { tracos[i] = []; itensTexto[i] = []; giros[i] = 0; }
+        historico = [JSON.stringify({ tracos, itensTexto, giros })];
 
         telaInicial.style.display = 'none';
         telaTrabalho.style.display = 'block';
@@ -279,7 +297,9 @@ function montarEstudioUI(container, arquivoInicial) {
       const index = parseInt(el.dataset.index);
       try {
         const page = await pdfDocJs.getPage(index + 1);
-        const viewport = page.getViewport({ scale: 0.3 });
+        // A miniatura reflete o giro aplicado no editor (rotação original + delta desta página).
+        const rot = ((((page.rotate || 0) + (giros[index] || 0)) % 360) + 360) % 360;
+        const viewport = page.getViewport({ scale: 0.3, rotation: rot });
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width; canvas.height = viewport.height;
         await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
@@ -294,6 +314,12 @@ function montarEstudioUI(container, arquivoInicial) {
     const cvsEditor = container.querySelector('#est-canvas');
     const tracoCanvas = container.querySelector('#est-traco-canvas');
 
+    // Acessibilidade do modal do editor (foco preso, Esc fecha, foco devolvido). Ver Item 2.
+    const a11yEditor = window.PDFTools.UI.tornarModalAcessivel(modalEditor, {
+      rotulo: 'Editor de página',
+      botaoFechar: () => container.querySelector('#btn-est-fechar')
+    });
+
     let modoAtual = 'mover'; // 'mover' | 'lapis' | 'texto'
     let idxEditando = null;
     // Quando um clique na página fecha (commita) uma caixa de texto que estava aberta, esse mesmo
@@ -301,8 +327,16 @@ function montarEstudioUI(container, arquivoInicial) {
     // caixa vazia fantasma. Ligado no mousedown (aoCliqueFora) e consumido no click do wrapper.
     let cliqueFechouEdicao = false;
     let paginaPdfAtual = null;
+    let rotacaoBasePagina = 0; // /Rotate original da página aberta (o que o pdf.js reporta em .rotate)
     let escalaBase = 1;
     let visPageWidthPt = 1, visPageHeightPt = 1;
+
+    // Ângulo VISUAL da página aberta = rotação original + giro que a pessoa aplicou aqui. É o que
+    // o pdf.js usa pra renderizar (getViewport({rotation})) e o que a exportação usa pra converter
+    // as frações visuais em coordenada bruta do PDF. Sempre 0/90/180/270.
+    function anguloVisualAtual() {
+      return (((rotacaoBasePagina + (giros[paginaAtualModal] || 0)) % 360) + 360) % 360;
+    }
 
     // Lápis
     let lapisTamanhoPt = 3;
@@ -361,7 +395,7 @@ function montarEstudioUI(container, arquivoInicial) {
     }
 
     async function renderizarPaginaNoCanvas(fatorZoom) {
-      const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom });
+      const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom, rotation: anguloVisualAtual() });
       cvsEditor.width = viewport.width; cvsEditor.height = viewport.height;
 
       const ctx = cvsEditor.getContext('2d');
@@ -387,7 +421,8 @@ function montarEstudioUI(container, arquivoInicial) {
 
       const page = await pdfDocJs.getPage(index + 1);
       paginaPdfAtual = page;
-      const viewportRef = page.getViewport({ scale: 1.0 });
+      rotacaoBasePagina = (((page.rotate || 0) % 360) + 360) % 360;
+      const viewportRef = page.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
       visPageWidthPt = viewportRef.width;
       visPageHeightPt = viewportRef.height;
 
@@ -422,6 +457,82 @@ function montarEstudioUI(container, arquivoInicial) {
     container.querySelectorAll('.est-modo-btn').forEach(btn => {
       btn.onclick = () => definirModo(btn.dataset.modo);
     });
+
+    // --- GIRAR A PÁGINA ---------------------------------------------------------------------
+    // Um botão só, sempre no sentido horário (90° por clique): quatro cliques dão a volta completa,
+    // então dá pra chegar em qualquer uma das 4 orientações sem gastar um 2º botão — o seletor de
+    // modo já fica apertado a 380px, e "desfazer um giro" é Ctrl+Z (ou 3 cliques). Menos superfície,
+    // mesma capacidade.
+    //
+    // Remap das frações (0-1) do espaço visual ANTIGO pro NOVO — derivado e provado (identidades
+    // 4×90=id, 90+90=180, 90+(-90)=id). Marca e traço são presos ao conteúdo (giram junto): a marca
+    // usa a fórmula de caixa (w/h trocam) e vira alta/estreita sobre o texto que agora está de lado;
+    // o traço remapeia cada ponto. TEXTO fica HORIZONTAL/legível: reancorado pelo CENTRO no mesmo
+    // ponto do conteúdo, tamanho em pt preservado (sem re-quebra) — mesma convenção do resto do app,
+    // que sempre desenha texto na horizontal do espaço visual (inclusive em páginas com /Rotate).
+    function remapPontoFrac(fx, fy, d) {
+      d = ((d % 360) + 360) % 360;
+      if (d === 90) return { x: 1 - fy, y: fx };
+      if (d === 270) return { x: fy, y: 1 - fx };
+      if (d === 180) return { x: 1 - fx, y: 1 - fy };
+      return { x: fx, y: fy };
+    }
+    function remapMarca(item, d) {
+      d = ((d % 360) + 360) % 360;
+      const { x, y, w, h } = item;
+      if (d === 90) { item.x = 1 - y - h; item.y = x; item.w = h; item.h = w; }
+      else if (d === 270) { item.x = y; item.y = 1 - x - w; item.w = h; item.h = w; }
+      else if (d === 180) { item.x = 1 - x - w; item.y = 1 - y - h; }
+    }
+    // Texto: preserva o tamanho absoluto em pt (a página visual troca de dimensões no giro de 90°,
+    // então a mesma largura em pt vira outra fração) e recentra no ponto de conteúdo remapeado.
+    function remapTexto(item, d, oldVisW, oldVisH, newVisW, newVisH) {
+      const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+      const c = remapPontoFrac(cx, cy, d);
+      const wPt = item.w * oldVisW, hPt = item.h * oldVisH;
+      item.w = wPt / newVisW;
+      item.h = hPt / newVisH;
+      item.x = Math.max(0, Math.min(c.x - item.w / 2, 1 - item.w));
+      item.y = Math.max(0, Math.min(c.y - item.h / 2, 1 - item.h));
+    }
+
+    // Recalcula o "ajustar à tela" (escalaBase) e as dimensões visuais da página atual a partir do
+    // ângulo visual corrente — retrato↔paisagem no giro de 90° muda largura/altura, então a escala
+    // precisa ser refeita. Respeita a tela cheia (fatorMáximo 3 vs 1.5).
+    function recalcularEscalaBase() {
+      if (!paginaPdfAtual) return;
+      const emTelaCheia = document.fullscreenElement === modalEditor;
+      const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
+      visPageWidthPt = viewportRef.width;
+      visPageHeightPt = viewportRef.height;
+      escalaBase = calcularEscalaAjuste(viewportRef, emTelaCheia ? 3 : 1.5);
+    }
+
+    function girarPagina(delta) {
+      if (!paginaPdfAtual) return;
+      const idx = paginaAtualModal;
+      const oldVisW = visPageWidthPt, oldVisH = visPageHeightPt;
+      salvarEstado();
+
+      // Dimensões visuais NOVAS (90°/270° trocam largura↔altura) pra reancorar o texto em pt.
+      const anguloNovo = (((rotacaoBasePagina + (giros[idx] || 0) + delta) % 360) + 360) % 360;
+      const vpNovo = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloNovo });
+      const newVisW = vpNovo.width, newVisH = vpNovo.height;
+
+      (itensTexto[idx] || []).forEach(item => {
+        if (item.tipo === 'marca') remapMarca(item, delta);
+        else remapTexto(item, delta, oldVisW, oldVisH, newVisW, newVisH);
+      });
+      (tracos[idx] || []).forEach(tr => {
+        tr.pontosNorm = (tr.pontosNorm || []).map(p => remapPontoFrac(p.x, p.y, delta));
+      });
+
+      giros[idx] = (((giros[idx] || 0) + delta) % 360 + 360) % 360;
+      idxEditando = null;
+      recalcularEscalaBase();
+      renderizarPaginaNoCanvas(controleZoom.obterZoom());
+    }
+    container.querySelector('#btn-est-girar').onclick = () => girarPagina(90);
 
     // --- LÁPIS: desenho vetorial direto sobre a página ---
     container.querySelectorAll('#est-painel-lapis .est-lapis-tamanho').forEach(btn => {
@@ -875,7 +986,7 @@ function montarEstudioUI(container, arquivoInicial) {
       const ts = tracos[paginaAtualModal] || [];
       const its = itensTexto[paginaAtualModal] || [];
       if (ts.length === 0 && its.length === 0) return alert('Inclua pelo menos um traço ou texto nesta página primeiro.');
-      if (confirm('Replicar tudo desta página (traços e textos) para TODAS as páginas do documento? Isso sobrescreve a edição das outras.')) {
+      if (confirm('Replicar os traços e textos desta página para TODAS as páginas do documento? Isso sobrescreve a edição das outras. (O giro da página NÃO é replicado — cada página mantém a própria rotação.)')) {
         salvarEstado();
         const cloneTs = JSON.parse(JSON.stringify(ts));
         const cloneIts = JSON.parse(JSON.stringify(its));
@@ -1043,7 +1154,7 @@ function montarEstudioUI(container, arquivoInicial) {
 
     // --- DESFAZER ---
     function salvarEstado() {
-      historico.push(JSON.stringify({ tracos, itensTexto }));
+      historico.push(JSON.stringify({ tracos, itensTexto, giros }));
       if (historico.length > 20) historico.shift();
     }
 
@@ -1053,9 +1164,12 @@ function montarEstudioUI(container, arquivoInicial) {
         // novo estado (e remove da pilha), em vez de descartá-lo e pular pro que vem antes dele.
         const estado = JSON.parse(historico.pop());
         tracos = estado.tracos; itensTexto = estado.itensTexto;
+        if (estado.giros) giros = estado.giros;
         idxEditando = null;
-        redesenharTracos();
-        renderizarItensEditor();
+        // Re-renderiza a página inteira (não só traços/itens): desfazer pode ter revertido um giro,
+        // e aí o canvas precisa voltar ao ângulo anterior, com a escala "ajustar à tela" refeita.
+        recalcularEscalaBase();
+        renderizarPaginaNoCanvas(controleZoom.obterZoom());
       }
     };
 
@@ -1070,6 +1184,14 @@ function montarEstudioUI(container, arquivoInicial) {
       if (document.fullscreenElement === modalEditor) document.exitFullscreen().catch(() => {});
       modalEditor.style.display = 'none';
       document.body.classList.remove('pdf-editor-modal-aberto');
+      // Re-renderiza a miniatura da página recém-editada pra refletir giro/conteúdo na grade.
+      const elPag = container.querySelector(`.est-pagina[data-index="${paginaAtualModal}"]`);
+      if (elPag) {
+        const thumb = elPag.querySelector('.est-thumb-container');
+        if (thumb) thumb.innerHTML = '';
+        delete elPag.dataset.rendered;
+        renderizarMiniatura(elPag);
+      }
       atualizarBadges();
     };
 
@@ -1093,8 +1215,7 @@ function montarEstudioUI(container, arquivoInicial) {
       const emTelaCheia = document.fullscreenElement === modalEditor;
       btnFullscreen.textContent = emTelaCheia ? '⤡ Sair da Tela Cheia' : '⛶ Tela Cheia';
       if (!paginaPdfAtual) return;
-      const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
-      escalaBase = calcularEscalaAjuste(viewportRef, emTelaCheia ? 3 : 1.5);
+      recalcularEscalaBase();
       renderizarPaginaNoCanvas(controleZoom.obterZoom());
     }
     document.addEventListener('fullscreenchange', aoMudarFullscreenEstudio);
@@ -1106,9 +1227,7 @@ function montarEstudioUI(container, arquivoInicial) {
       if (modalEditor.style.display === 'none' || !paginaPdfAtual) return;
       if (_resizeRaf) cancelAnimationFrame(_resizeRaf);
       _resizeRaf = requestAnimationFrame(() => {
-        const emTelaCheia = document.fullscreenElement === modalEditor;
-        const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
-        escalaBase = calcularEscalaAjuste(viewportRef, emTelaCheia ? 3 : 1.5);
+        recalcularEscalaBase();
         renderizarPaginaNoCanvas(controleZoom.obterZoom());
       });
     }
@@ -1119,7 +1238,8 @@ function montarEstudioUI(container, arquivoInicial) {
     container.querySelector('#btn-gerar').onclick = async () => {
       const totalTracos = Object.values(tracos).flat().length;
       const totalTextos = Object.values(itensTexto).flat().length;
-      if (totalTracos + totalTextos === 0) {
+      const totalGiros = Object.values(giros).filter(g => g).length;
+      if (totalTracos + totalTextos + totalGiros === 0) {
         return alert('Você ainda não incluiu nada no documento.\n\nComo fazer:\n1. Clique em uma das páginas.\n2. No editor que abrir, escolha "✏️ Lápis" (desenhe direto na página), "📝 Texto" (clique onde quer escrever) ou "🖍️ Marca" (clique e arraste sobre o texto pra grifar).\n3. Clique em "Concluir Página" e depois em "Gerar PDF Editado".');
       }
 
@@ -1128,7 +1248,7 @@ function montarEstudioUI(container, arquivoInicial) {
       try {
         await PDFTools.carregarLib('pdf-lib');
 
-        const blob = await aplicarEdicoesEstudio(fileOrig, tracos, itensTexto, (pct, txt) => progresso.atualizar(pct, txt));
+        const blob = await aplicarEdicoesEstudio(fileOrig, tracos, itensTexto, giros, (pct, txt) => progresso.atualizar(pct, txt));
         PDFTools.UI.mostrarToast('PDF editado com sucesso!', 'sucesso');
         const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-editado.pdf';
         PDFTools.baixar(blob, nome);
@@ -1167,6 +1287,7 @@ function montarEstudioUI(container, arquivoInicial) {
       window.removeEventListener('resize', aoRedimensionarEstudio);
       window.removeEventListener('orientationchange', aoRedimensionarEstudio);
       document.body.classList.remove('pdf-editor-modal-aberto');
+      try { a11yEditor.destruir(); } catch (e) {}
       try { visaoObserver.disconnect(); } catch (e) {}
     };
 }
@@ -1320,9 +1441,9 @@ function desenharTextoMultilinhaNoPdf(page, item, font, rawW, rawH, angulo) {
   });
 }
 
-async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, aoProgredir) {
+async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, girosMap, aoProgredir) {
   const buffer = await PDFTools.lerComoArrayBuffer(fileOrig);
-  const { PDFDocument, StandardFonts } = window.PDFLib;
+  const { PDFDocument, StandardFonts, degrees } = window.PDFLib;
   const novoDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
   const numPages = novoDoc.getPageCount();
 
@@ -1342,14 +1463,21 @@ async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, aoProgr
     const page = novoDoc.getPage(i);
     const rawSize = page.getSize();
     const anguloOriginal = page.getRotation().angle;
+    // Giro aplicado no editor entra por cima do /Rotate original. Como as frações dos itens já
+    // foram remapeadas pro espaço visual do ângulo TOTAL (ver girarPagina), tanto o /Rotate gravado
+    // quanto o ângulo usado pra desenhar têm que ser o total — desenhar com um e gravar outro é o
+    // erro clássico aqui. As dimensões brutas (rawSize) não mudam com o giro.
+    const delta = (girosMap && girosMap[i]) || 0;
+    const anguloTotal = (((anguloOriginal + delta) % 360) + 360) % 360;
+    if (delta) page.setRotation(degrees(anguloTotal));
 
     const listaTracos = tracosMap[i] || [];
-    listaTracos.forEach(tr => desenharTracoNoPdf(page, tr, rawSize.width, rawSize.height, anguloOriginal));
+    listaTracos.forEach(tr => desenharTracoNoPdf(page, tr, rawSize.width, rawSize.height, anguloTotal));
 
     const listaTextos = itensTextoMap[i] || [];
     for (const item of listaTextos) {
       if (item.tipo === 'marca') {
-        desenharMarcaNoPdf(page, item, rawSize.width, rawSize.height, anguloOriginal);
+        desenharMarcaNoPdf(page, item, rawSize.width, rawSize.height, anguloTotal);
         continue;
       }
       if (!item.val) continue;
@@ -1358,7 +1486,7 @@ async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, aoProgr
       if (charRuim) {
         throw new Error(`O texto da página ${i + 1} contém o caractere "${charRuim}", que não é suportado pela fonte escolhida. Remova esse caractere ou troque a fonte antes de gerar o PDF.`);
       }
-      desenharTextoMultilinhaNoPdf(page, item, font, rawSize.width, rawSize.height, anguloOriginal);
+      desenharTextoMultilinhaNoPdf(page, item, font, rawSize.width, rawSize.height, anguloTotal);
     }
   }
 
