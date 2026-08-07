@@ -42,6 +42,15 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
         .est-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 24px; overflow: auto; position: relative; }
 
+        /* Telas baixas/estreitas: recupera altura útil comendo o padding e compactando a topbar
+           (que a 380px quebrava em 2-3 linhas), para a página ficar o maior possível. */
+        @media (max-height: 720px), (max-width: 500px) {
+          .est-modal-body { padding: 8px; gap: 8px; }
+          .est-modal-topbar { padding: 6px 12px; gap: 8px; }
+          .est-modal-topbar .est-btn { padding: 5px 8px; font-size: 12px; }
+          .est-ferramentas-flutuante { top: 64px; left: 8px; }
+        }
+
         .est-editor-wrapper { position: relative; isolation: isolate; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; background: var(--sup); }
         .est-editor-canvas { display: block; }
         .est-editor-layer-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
@@ -287,6 +296,10 @@ function montarEstudioUI(container, arquivoInicial) {
 
     let modoAtual = 'mover'; // 'mover' | 'lapis' | 'texto'
     let idxEditando = null;
+    // Quando um clique na página fecha (commita) uma caixa de texto que estava aberta, esse mesmo
+    // clique NÃO deve também criar uma caixa nova — senão "clicar fora pra concluir" já plantava uma
+    // caixa vazia fantasma. Ligado no mousedown (aoCliqueFora) e consumido no click do wrapper.
+    let cliqueFechouEdicao = false;
     let paginaPdfAtual = null;
     let escalaBase = 1;
     let visPageWidthPt = 1, visPageHeightPt = 1;
@@ -335,10 +348,15 @@ function montarEstudioUI(container, arquivoInicial) {
     // tela" fica maior do que cabe de verdade e a parte de cima acaba renderizada atrás da barra
     // do topo (inacessível a cliques/toque).
     function calcularEscalaAjuste(viewportRef, fatorMaximo) {
-      const padding = 48; // 24px de padding de cada lado (ver .est-modal-body)
+      // Lê o padding real do .est-modal-body (que muda por media query em telas baixas/estreitas)
+      // em vez de um valor fixo — assim a constante nunca "mente" quando o CSS responsivo reduz o
+      // padding, e a página aproveita exatamente o espaço disponível.
+      const cs = getComputedStyle(modalBody);
+      const padH = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
       const larguraNav = navegadorPaginas.elemento.offsetWidth ? navegadorPaginas.elemento.offsetWidth + 16 : 0; // +16 = gap
-      const maxWidth = Math.max(100, modalBody.clientWidth - padding - larguraNav);
-      const maxHeight = Math.max(100, modalBody.clientHeight - padding);
+      const maxWidth = Math.max(100, modalBody.clientWidth - padH - larguraNav);
+      const maxHeight = Math.max(100, modalBody.clientHeight - padV);
       return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
     }
 
@@ -359,6 +377,11 @@ function montarEstudioUI(container, arquivoInicial) {
       idxEditando = null;
       container.querySelector('#est-modal-pagina').textContent = index + 1;
       modalEditor.style.display = 'flex';
+      // Neutraliza o backdrop-filter do #workspace enquanto o modal está aberto: esse filtro cria
+      // um containing-block que prende o position:fixed do modal dentro do workspace (não da
+      // viewport). Como o modal cobre tudo, tirar o blur é invisível — e a página passa a usar a
+      // tela inteira. Ver regra `body.pdf-editor-modal-aberto #workspace` no CSS.
+      document.body.classList.add('pdf-editor-modal-aberto');
       layer.innerHTML = '';
       navegadorPaginas.atualizar(index, numPages);
 
@@ -667,8 +690,15 @@ function montarEstudioUI(container, arquivoInicial) {
 
     // --- Clique na página (modo Texto) cria uma caixa nova e já abre pra digitar ---
     wrapper.addEventListener('click', (e) => {
+      // Se este clique acabou de fechar uma caixa em edição, ele não cria outra (consome o flag).
+      const fechouEdicao = cliqueFechouEdicao; cliqueFechouEdicao = false;
       if (modoAtual !== 'texto') return;
       if (e.target.closest('.est-texto-editando-area')) return;
+      // Clicar num item já existente (mesmo em modo Texto) seleciona/arrasta esse item — não cria
+      // uma caixa nova por cima dele (era o que causava a perda do texto recém-digitado e a caixa
+      // fantasma). Criar caixa nova continua valendo só ao clicar numa área vazia da página.
+      if (e.target.closest('.est-item-arrastavel')) return;
+      if (fechouEdicao) return;
       const rect = cvsEditor.getBoundingClientRect();
       const xFrac = (e.clientX - rect.left) / rect.width;
       const yFrac = (e.clientY - rect.top) / rect.height;
@@ -827,6 +857,9 @@ function montarEstudioUI(container, arquivoInicial) {
       function aoCliqueFora(e) {
         if (ta.contains(e.target)) return;
         if (e.target.closest && e.target.closest('#est-painel-texto')) return;
+        // Só marca o flag quando o clique cai dentro da página (o único lugar que criaria uma caixa
+        // nova); cliques na barra/painel commitam sem precisar suprimir criação nenhuma.
+        if (wrapper.contains(e.target)) cliqueFechouEdicao = true;
         commit();
       }
       document.addEventListener('mousedown', aoCliqueFora, true);
@@ -890,13 +923,16 @@ function montarEstudioUI(container, arquivoInicial) {
         const resizer = document.createElement('div'); resizer.className = 'est-resize-handle'; el.appendChild(resizer);
         const del = document.createElement('div'); del.className = 'est-delete-handle'; del.textContent = '✕'; el.appendChild(del);
 
-        el.onmousedown = (e) => { if (modoAtual === 'mover') startDrag(e, idx, el); };
-        el.ontouchstart = (e) => { if (modoAtual === 'mover') startDrag(e, idx, el); };
-        el.ondblclick = (e) => { if (modoAtual === 'mover' && item.tipo !== 'marca') { e.stopPropagation(); abrirEdicaoTexto(idx); } };
-        resizer.onmousedown = (e) => { if (modoAtual === 'mover') startResize(e, idx, el); };
-        resizer.ontouchstart = (e) => { if (modoAtual === 'mover') startResize(e, idx, el); };
+        // Itens já criados podem ser manipulados em qualquer modo MENOS o Lápis (que precisa da
+        // página livre pra desenhar) — assim, logo depois de digitar, clicar no item já move/edita
+        // sem exigir troca manual pro modo Mover (era a causa do "clico e não move").
+        el.onmousedown = (e) => { if (modoAtual !== 'lapis') startDrag(e, idx, el, item); };
+        el.ontouchstart = (e) => { if (modoAtual !== 'lapis') startDrag(e, idx, el, item); };
+        el.ondblclick = (e) => { if (modoAtual !== 'lapis' && item.tipo !== 'marca') { e.stopPropagation(); abrirEdicaoTexto(idx); } };
+        resizer.onmousedown = (e) => { if (modoAtual !== 'lapis') startResize(e, idx, el, item); };
+        resizer.ontouchstart = (e) => { if (modoAtual !== 'lapis') startResize(e, idx, el, item); };
         del.onclick = (e) => {
-          if (modoAtual !== 'mover') return;
+          if (modoAtual === 'lapis') return;
           e.stopPropagation(); salvarEstado();
           itensTexto[paginaAtualModal].splice(idx, 1);
           renderizarItensEditor();
@@ -909,22 +945,26 @@ function montarEstudioUI(container, arquivoInicial) {
     // --- DRAG E RESIZE (itens de texto) ---
     let draggingInfo = null;
 
-    function startDrag(e, idx, el) {
+    // draggingInfo guarda a REFERÊNCIA do elemento (el) e do item (não só o índice): se um
+    // re-render assíncrono da camada acontecer no meio do gesto, reler layer.children[idx] pegaria
+    // outro elemento (ou um índice já deslocado por um splice) — guardar a referência blinda contra
+    // isso (hipóteses H2/H3 da investigação do bug de mover texto).
+    function startDrag(e, idx, el, item) {
       if (e.target.classList.contains('est-resize-handle') || e.target.classList.contains('est-delete-handle') || e.target.classList.contains('est-texto-editando-area')) return;
       e.preventDefault(); e.stopPropagation();
       document.querySelectorAll('.est-item-arrastavel').forEach(el => el.classList.remove('ativo'));
       el.classList.add('ativo');
       const cx = e.touches ? e.touches[0].clientX : e.clientX;
       const cy = e.touches ? e.touches[0].clientY : e.clientY;
-      draggingInfo = { mode: 'drag', idx, startX: cx, startY: cy, initL: parseFloat(el.style.left), initT: parseFloat(el.style.top) };
+      draggingInfo = { mode: 'drag', idx, el, item, startX: cx, startY: cy, initL: parseFloat(el.style.left), initT: parseFloat(el.style.top) };
     }
 
-    function startResize(e, idx, el) {
+    function startResize(e, idx, el, item) {
       e.preventDefault(); e.stopPropagation();
       el.classList.add('ativo');
       const cx = e.touches ? e.touches[0].clientX : e.clientX;
       const cy = e.touches ? e.touches[0].clientY : e.clientY;
-      draggingInfo = { mode: 'resize', idx, startX: cx, startY: cy, initW: parseFloat(el.style.width), initH: parseFloat(el.style.height) };
+      draggingInfo = { mode: 'resize', idx, el, item, startX: cx, startY: cy, initW: parseFloat(el.style.width), initH: parseFloat(el.style.height) };
     }
 
     function doMove(e) {
@@ -934,8 +974,7 @@ function montarEstudioUI(container, arquivoInicial) {
       const cy = e.touches ? e.touches[0].clientY : e.clientY;
       const dx = cx - draggingInfo.startX;
       const dy = cy - draggingInfo.startY;
-      const idx = draggingInfo.idx;
-      const el = layer.children[idx];
+      const el = draggingInfo.el;
       if (!el) return;
 
       if (draggingInfo.mode === 'drag') {
@@ -945,8 +984,7 @@ function montarEstudioUI(container, arquivoInicial) {
         el.style.width = Math.max(20, draggingInfo.initW + dx) + 'px';
         // Marca texto também redimensiona a altura no arrasto — diferente de texto, onde a
         // altura é sempre recalculada a partir da quebra de linha, não arrastada manualmente.
-        const item = itensTexto[paginaAtualModal][idx];
-        if (item && item.tipo === 'marca') {
+        if (draggingInfo.item && draggingInfo.item.tipo === 'marca') {
           el.style.height = Math.max(10, draggingInfo.initH + dy) + 'px';
         }
       }
@@ -958,7 +996,8 @@ function montarEstudioUI(container, arquivoInicial) {
         return;
       }
       const idx = draggingInfo.idx;
-      const el = layer.children[idx];
+      const el = draggingInfo.el;
+      const item = draggingInfo.item;
       const modo = draggingInfo.mode;
 
       // Um clique simples (sem arrastar de fato) passa por aqui também — sem isso, o próprio ato
@@ -969,10 +1008,10 @@ function montarEstudioUI(container, arquivoInicial) {
         : (parseFloat(el.style.width) === draggingInfo.initW && parseFloat(el.style.height) === draggingInfo.initH);
       draggingInfo = null;
       if (semMovimento) return;
+      if (!el || !item) return;
 
       salvarEstado();
       const wCvs = cvsEditor.width, hCvs = cvsEditor.height;
-      const item = itensTexto[paginaAtualModal][idx];
       item.x = parseFloat(el.style.left) / wCvs;
       item.y = parseFloat(el.style.top) / hCvs;
       item.w = parseFloat(el.style.width) / wCvs;
@@ -1030,6 +1069,7 @@ function montarEstudioUI(container, arquivoInicial) {
     container.querySelector('#btn-est-fechar').onclick = () => {
       if (document.fullscreenElement === modalEditor) document.exitFullscreen().catch(() => {});
       modalEditor.style.display = 'none';
+      document.body.classList.remove('pdf-editor-modal-aberto');
       atualizarBadges();
     };
 
@@ -1058,6 +1098,22 @@ function montarEstudioUI(container, arquivoInicial) {
       renderizarPaginaNoCanvas(controleZoom.obterZoom());
     }
     document.addEventListener('fullscreenchange', aoMudarFullscreenEstudio);
+
+    // Recalcula o "ajustar à tela" quando a janela muda de tamanho ou o celular gira — senão a
+    // página fica com a escala calculada para o tamanho antigo (grande demais ou pequena demais).
+    let _resizeRaf = null;
+    function aoRedimensionarEstudio() {
+      if (modalEditor.style.display === 'none' || !paginaPdfAtual) return;
+      if (_resizeRaf) cancelAnimationFrame(_resizeRaf);
+      _resizeRaf = requestAnimationFrame(() => {
+        const emTelaCheia = document.fullscreenElement === modalEditor;
+        const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
+        escalaBase = calcularEscalaAjuste(viewportRef, emTelaCheia ? 3 : 1.5);
+        renderizarPaginaNoCanvas(controleZoom.obterZoom());
+      });
+    }
+    window.addEventListener('resize', aoRedimensionarEstudio);
+    window.addEventListener('orientationchange', aoRedimensionarEstudio);
 
     // --- GERAR PDF ---
     container.querySelector('#btn-gerar').onclick = async () => {
@@ -1108,6 +1164,9 @@ function montarEstudioUI(container, arquivoInicial) {
       document.removeEventListener('touchend', doEnd);
       document.removeEventListener('keydown', aoTecladoEstudio);
       document.removeEventListener('fullscreenchange', aoMudarFullscreenEstudio);
+      window.removeEventListener('resize', aoRedimensionarEstudio);
+      window.removeEventListener('orientationchange', aoRedimensionarEstudio);
+      document.body.classList.remove('pdf-editor-modal-aberto');
       try { visaoObserver.disconnect(); } catch (e) {}
     };
 }

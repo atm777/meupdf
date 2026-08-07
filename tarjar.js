@@ -40,6 +40,10 @@ PDFTools.registrar({
         .tj-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; }
         .tj-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
         .tj-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 24px; overflow: auto; position: relative; }
+        @media (max-height: 720px), (max-width: 500px) {
+          .tj-modal-body { padding: 8px; gap: 8px; }
+          .tj-modal-topbar { padding: 6px 12px; }
+        }
         
         .tj-editor-wrapper { position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; }
         .tj-editor-canvas { display: block; }
@@ -223,10 +227,13 @@ PDFTools.registrar({
     // e a faixa do navegador de páginas) em vez de um chute em cima de window.innerHeight —
     // senão a página "ajustada à tela" fica maior do que cabe de verdade.
     function calcularEscalaAjuste(viewportRef, fatorMaximo) {
-      const padding = 48; // 24px de padding de cada lado (ver .tj-modal-body)
+      // Padding real do .tj-modal-body (muda por media query em telas baixas) em vez de fixo.
+      const cs = getComputedStyle(modalBody);
+      const padH = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
       const larguraNav = navegadorPaginas.elemento.offsetWidth ? navegadorPaginas.elemento.offsetWidth + 16 : 0;
-      const maxWidth = Math.max(100, modalBody.clientWidth - padding - larguraNav);
-      const maxHeight = Math.max(100, modalBody.clientHeight - padding);
+      const maxWidth = Math.max(100, modalBody.clientWidth - padH - larguraNav);
+      const maxHeight = Math.max(100, modalBody.clientHeight - padV);
       return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
     }
 
@@ -246,6 +253,10 @@ PDFTools.registrar({
       paginaAtualModal = index;
       container.querySelector('#tj-modal-pagina').textContent = index + 1;
       modal.style.display = 'flex';
+      // Neutraliza o backdrop-filter do #workspace enquanto o modal está aberto (ver regra CSS
+      // body.pdf-editor-modal-aberto #workspace): sem isso o filtro prende o position:fixed do
+      // modal dentro do workspace em vez da viewport, e a página fica menor do que caberia.
+      document.body.classList.add('pdf-editor-modal-aberto');
       layer.innerHTML = '';
       navegadorPaginas.atualizar(index, numPages);
 
@@ -257,6 +268,20 @@ PDFTools.registrar({
 
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
     }
+
+    // Recalcula o "ajustar à tela" ao mudar o tamanho da janela / girar o celular.
+    let _resizeRafTj = null;
+    function aoRedimensionarTarjar() {
+      if (modal.style.display === 'none' || !paginaPdfAtual) return;
+      if (_resizeRafTj) cancelAnimationFrame(_resizeRafTj);
+      _resizeRafTj = requestAnimationFrame(() => {
+        const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
+        escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
+        renderizarPaginaNoCanvas(controleZoom.obterZoom());
+      });
+    }
+    window.addEventListener('resize', aoRedimensionarTarjar);
+    window.addEventListener('orientationchange', aoRedimensionarTarjar);
 
     function renderizarTarjasEditor() {
       layer.innerHTML = '';
@@ -376,6 +401,7 @@ PDFTools.registrar({
 
     container.querySelector('#btn-tj-fechar').onclick = () => {
       modal.style.display = 'none';
+      document.body.classList.remove('pdf-editor-modal-aberto');
       atualizarBadgesNaGrade();
     };
 
@@ -435,6 +461,9 @@ PDFTools.registrar({
     // Cleanup chamado por index.html ao trocar de ferramenta ou voltar pra home.
     return function limparTarjar() {
       document.removeEventListener('keydown', aoTecladoTarjar);
+      window.removeEventListener('resize', aoRedimensionarTarjar);
+      window.removeEventListener('orientationchange', aoRedimensionarTarjar);
+      document.body.classList.remove('pdf-editor-modal-aberto');
       try { visaoObserver.disconnect(); } catch (e) {}
     };
   }
