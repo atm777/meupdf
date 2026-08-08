@@ -1,0 +1,483 @@
+:root {
+  /* Variáveis de Cor do Tema */
+  --bg: #0f172a;
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --sup: rgba(30, 41, 59, 0.7);
+  --sup-2: rgba(51, 65, 85, 0.8);
+  --borda: rgba(255, 255, 255, 0.1);
+  --texto: #f8fafc;
+  --texto-2: #94a3b8;
+  --acento: #38bdf8;
+  --acento-hover: #0284c7;
+  --erro: #ef4444;
+  --sucesso: #10b981;
+  --sombra: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --blur: blur(12px);
+  --r: 16px;
+  --fonte: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  
+  /* Variáveis mapeadas para as ferramentas internas (ui.js) */
+  --cor-primaria: var(--acento);
+  --cor-fundo: transparent;
+  --cor-texto: var(--texto);
+  --cor-borda: var(--borda);
+  --cor-erro: var(--erro);
+  --cor-sucesso: var(--sucesso);
+  /* Fundo levemente esverdeado para painéis de "sucesso"/honestidade (usado no Assinar).
+     Translúcido de propósito: funciona sobre o tema claro e o escuro sem redefinir. */
+  --cor-sucesso-fundo: rgba(16, 185, 129, 0.15);
+  --fonte-padrao: var(--fonte);
+  --raio-borda: 12px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f8fafc;
+    --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    --sup: rgba(255, 255, 255, 0.8);
+    --sup-2: rgba(241, 245, 249, 0.9);
+    --borda: rgba(0, 0, 0, 0.05);
+    --texto: #0f172a;
+    --texto-2: #475569;
+    --acento: #0ea5e9;
+    --acento-hover: #0284c7;
+    --sombra: 0 8px 32px 0 rgba(30, 41, 59, 0.08);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Foco visível por teclado. `:where()` mantém a especificidade em 0, então qualquer regra de
+   componente ainda vence se precisar. `:focus-visible` só aparece na navegação por teclado, não
+   no clique do mouse. var(--acento) tem contraste suficiente nos dois temas. */
+:where(button, a, [tabindex], input, select, textarea):focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+body {
+  margin: 0; 
+  background: var(--bg-gradient); 
+  color: var(--texto);
+  font: 16px/1.55 var(--fonte); 
+  padding-bottom: env(safe-area-inset-bottom);
+  min-height: 100vh;
+}
+
+.wrap { width: 100%; max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+
+/* Barra de ferramentas no topo — fila única, tipo programa de computador */
+.topo-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--sup-2);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--borda);
+}
+
+.toolbar-logo-link { flex-shrink: 0; display: flex; line-height: 0; }
+.toolbar-logo { width: 42px; height: 42px; border-radius: 8px; }
+
+/* Só faz diferença no Blogger (não existe no index.html local): o Blogger embrulha o
+   <b:section id="header"> e o <b:widget> de dentro em divs próprias (.section, .widget,
+   .widget-content), o que quebra o flex de .topo-toolbar (logo/nav deixam de ser itens
+   diretos). "display: contents" neutraliza esses wrappers sem afetar o layout local. */
+#header, #header .widget, #header .widget-content { display: contents; }
+
+.toolbar-ferramentas {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  /* `center` como fallback; `safe center` para navegadores que o entendem: quando o conteúdo
+     transborda, o alinhamento vira `start` (esquerda), então scrollLeft=0 = primeira ferramenta
+     visível e tudo é alcançável rolando para a direita. Sem `safe`, o `center` distribui o
+     transbordo dos dois lados e a parte presa à esquerda fica inacessível (scrollLeft não pode
+     ser negativo). */
+  justify-content: center;
+  justify-content: safe center;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.toolbar-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-shrink: 0;
+  width: 62px;
+  height: 54px;
+  background: var(--sup);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  color: var(--texto);
+  cursor: pointer;
+  padding: 0 4px;
+  transition: border-color 0.15s ease, transform 0.15s ease, opacity 0.2s ease;
+}
+.toolbar-btn-icone { font-size: 21px; line-height: 1; }
+.toolbar-btn-icone svg { width: 22px; height: 22px; display: block; }
+.toolbar-btn-rotulo { font-size: 10px; font-weight: 600; line-height: 1; white-space: nowrap; }
+.toolbar-btn:hover { border-color: var(--acento); transform: translateY(-1px); }
+
+@media (max-width: 700px) {
+  .toolbar-logo { width: 32px; height: 32px; }
+  .toolbar-btn { width: 54px; height: 48px; }
+  .toolbar-btn-icone { font-size: 18px; }
+  .toolbar-btn-icone svg { width: 20px; height: 20px; }
+  .toolbar-btn-rotulo { font-size: 9px; }
+}
+
+/* Área central: dropzone (ou prévia do PDF) — o foco principal da página */
+#hero-mesa {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 16px;
+  min-height: 70vh;
+  padding: 32px 0;
+}
+
+#hero-dropzone-area { width: 100%; }
+#hero-dropzone-area .pdf-dropzone { max-width: 600px; margin: 0 auto; padding: 48px 20px; }
+
+/* Dropzone de destaque da home: é, sem dúvida, o elemento mais pesado da tela — mais larga,
+   mais alta, com um botão sólido "Escolher PDF" e uma linha do que aceita. */
+#hero-dropzone-area .pdf-dropzone-destaque {
+  padding: 56px 40px;
+  background: var(--sup);
+  box-shadow: var(--sombra);
+}
+#hero-dropzone-area .pdf-dropzone-destaque .pdf-dropzone-icon { font-size: 46px; margin-bottom: 4px; }
+.pdf-dropzone-botao {
+  display: inline-block; margin: 10px 0 12px; padding: 14px 34px;
+  background: var(--cor-primaria); color: #fff; border: none; border-radius: var(--raio-borda);
+  font-size: 1.05rem; font-weight: 700; cursor: pointer; font-family: var(--fonte);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.pdf-dropzone-botao:hover { background: var(--acento-hover); transform: translateY(-1px); }
+.pdf-dropzone-destaque .pdf-dropzone-text { color: var(--texto-2); font-size: 0.92rem; }
+.pdf-dropzone-dica {
+  margin: 14px auto 0; max-width: 460px; font-size: 0.8rem; color: var(--texto-2); line-height: 1.45;
+}
+.pdf-dropzone-dica strong { color: var(--texto); font-weight: 600; }
+
+.hero-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  max-width: 95vw;
+  background: var(--sup);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--borda);
+  border-radius: var(--r);
+  box-shadow: var(--sombra);
+}
+.hero-preview canvas {
+  width: auto;
+  height: auto;
+  max-width: 90vw;
+  max-height: 68vh;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+.hero-preview-nome { font-weight: 700; word-break: break-all; }
+.hero-preview-meta { color: var(--texto-2); font-size: 0.85rem; }
+.hero-preview-trocar {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: var(--acento);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: var(--fonte);
+}
+
+/* Área de Trabalho da Ferramenta */
+#workspace {
+  background: var(--sup);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--borda);
+  border-radius: var(--r);
+  padding: 30px;
+  box-shadow: var(--sombra);
+  margin: 20px 0 40px;
+  display: none;
+}
+
+/* Editores de página (Editar/Assinar/Tarjar) abrem um modal position:fixed que DEVE cobrir a
+   viewport inteira. O backdrop-filter do #workspace cria um containing-block que prende esse fixed
+   dentro do workspace (não da viewport), deixando a página menor do que caberia. Enquanto o modal
+   está aberto, some com o filtro (invisível, pois o modal cobre tudo) para o fixed valer contra a
+   viewport. A classe é ligada/desligada pelo JS de cada editor ao abrir/fechar. */
+body.pdf-editor-modal-aberto #workspace { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+#workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--borda);
+}
+/* #workspace-title deixou de ser <h2> (não polui o outline de headings antes do conteúdo real);
+   mantém o peso visual de título de seção como elemento sem semântica de heading. */
+#workspace-title { font-size: 1.4rem; font-weight: 700; line-height: 1.3; }
+
+#btn-voltar {
+  background: var(--sup-2);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+#btn-voltar:hover { background: var(--acento); color: #fff; border-color: var(--acento); }
+
+.rodape { border-top: 1px solid var(--borda); padding: 30px 0; color: var(--texto-2); font-size: 0.9rem; text-align: center; }
+.rodape p { margin: 0; }
+
+/* =========================================================================
+   UI Compartilhada (Ferramentas Internas e ui.js dependem destas classes)
+   ========================================================================= */
+.pdf-dropzone {
+  border: 2px dashed var(--cor-borda);
+  border-radius: var(--raio-borda);
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--sup-2);
+  transition: all 0.2s ease;
+  color: var(--texto);
+}
+.pdf-dropzone.arrastando {
+  border-color: var(--cor-primaria);
+  background: rgba(56, 189, 248, 0.1);
+}
+.pdf-dropzone-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+.pdf-btn-texto {
+  background: none; border: none; color: var(--cor-primaria);
+  font-weight: bold; cursor: pointer; padding: 0; font-size: inherit; text-decoration: underline;
+}
+.pdf-lista-arquivos {
+  margin-top: 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.pdf-arquivo-item {
+  display: flex; align-items: center; padding: 12px;
+  border: 1px solid var(--cor-borda); border-radius: var(--raio-borda); background: var(--sup-2);
+}
+.pdf-arquivo-nome { flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-arquivo-tamanho { color: var(--texto-2); font-size: 14px; margin: 0 16px; }
+.pdf-btn-remover {
+  background: none; border: none; color: var(--cor-erro);
+  font-size: 18px; cursor: pointer; padding: 4px;
+}
+.pdf-btn-principal {
+  display: block; width: 100%; padding: 14px; background: var(--cor-primaria);
+  color: #fff; border: none; border-radius: var(--raio-borda);
+  font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 24px; min-height: 48px;
+  transition: 0.2s;
+}
+.pdf-btn-principal:hover:not(:disabled) { background: var(--acento-hover); transform: translateY(-1px); }
+.pdf-btn-principal:disabled { background: #555; opacity: 0.5; cursor: not-allowed; }
+
+.pdf-progresso { margin-top: 24px; }
+.pdf-progresso-texto { font-size: 14px; margin-bottom: 8px; color: var(--texto-2); }
+.pdf-progresso-barra-fundo { height: 8px; background: var(--sup-2); border-radius: 4px; overflow: hidden; }
+.pdf-progresso-barra-preenchimento { height: 100%; background: var(--cor-primaria); transition: width 0.2s linear; }
+
+.pdf-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+  background: #1e293b; color: white; padding: 12px 24px; border-radius: var(--raio-borda);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid var(--borda);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1000; opacity: 0;
+}
+.pdf-toast.visivel { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* Bloco "E agora?" (próximos passos após um resultado) */
+.pdf-proximos-passos { margin-top: 24px; }
+.pdf-proximos-titulo {
+  font-size: 0.8rem; font-weight: 700; color: var(--texto-2); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 12px;
+}
+.pdf-proximos-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 600px) {
+  .pdf-proximos-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.pdf-proximo-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  min-height: 84px; min-width: 48px; padding: 18px 12px;
+  background: var(--sup); border: 1px solid var(--cor-borda); border-radius: 14px;
+  color: var(--texto); font-family: var(--fonte-padrao); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; text-align: center; transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.pdf-proximo-btn:hover { transform: translateY(-2px); border-color: var(--cor-primaria); box-shadow: var(--sombra); }
+.pdf-proximo-icone {
+  width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; line-height: 1; border-radius: 10px; background: var(--sup-2);
+}
+.pdf-proximo-icone svg { width: 22px; height: 22px; display: block; }
+.pdf-proximo-btn.destaque { border-color: var(--cor-primaria); border-width: 2px; }
+.pdf-proximo-btn.destaque .pdf-proximo-icone { background: rgba(56, 189, 248, 0.15); }
+.pdf-proximo-rotulo { font-size: 0.7rem; color: var(--cor-primaria); font-weight: 700; }
+
+/* Controle de zoom dos editores de página (Assinar, Tarjar, Editar) */
+.pdf-zoom-controle {
+  display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.1);
+  border-radius: 6px; padding: 4px 8px;
+}
+.pdf-zoom-btn {
+  width: 26px; height: 26px; border: none; border-radius: 4px; background: rgba(255,255,255,0.15);
+  color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; padding: 0; line-height: 1;
+}
+.pdf-zoom-btn:hover { background: rgba(255,255,255,0.3); }
+.pdf-zoom-valor { color: #fff; font-size: 12px; font-weight: bold; min-width: 38px; text-align: center; }
+
+/* Navegador de páginas (setas ▲/▼) dos editores de página (Assinar, Tarjar, Editar) — fica do
+   lado da própria página dentro do modal, não no topo. */
+.pdf-nav-paginas {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: var(--sup); border-radius: 8px; padding: 10px 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2); flex-shrink: 0; align-self: center;
+}
+.pdf-nav-btn {
+  width: 32px; height: 32px; border: 1px solid var(--borda); border-radius: 6px;
+  background: var(--sup); color: var(--texto); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.pdf-nav-btn:hover:not(:disabled) { background: var(--sup-2); border-color: var(--cor-primaria); }
+.pdf-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.pdf-nav-valor { font-size: 12px; font-weight: bold; color: var(--texto-2); text-align: center; white-space: nowrap; }
+
+/* Histórico "Nesta sessão" (encadeamento de ferramentas) */
+.pdf-sessao-historico { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--cor-borda); }
+.pdf-sessao-titulo {
+  font-size: 0.8rem; font-weight: 700; color: var(--texto-2); text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 8px;
+}
+.pdf-sessao-item { font-size: 0.85rem; color: var(--texto); padding: 4px 0; }
+.pdf-sessao-item-check { color: var(--cor-sucesso); font-weight: bold; margin-right: 6px; }
+
+/* =========================================================================
+   Home informativa (mostrada em #hero-mesa quando não há PDF carregado)
+   ========================================================================= */
+#hero-info { width: 100%; max-width: 840px; margin: 12px auto 0; text-align: center; }
+.hero-info-titulo { font-size: 1.55rem; line-height: 1.25; margin: 24px 0 8px; }
+.hero-info-sub { color: var(--texto-2); max-width: 660px; margin: 0 auto 28px; }
+
+.hero-passos {
+  list-style: none; padding: 0; margin: 0 auto 32px;
+  display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+  max-width: 740px; text-align: left;
+}
+.hero-passos li {
+  flex: 1 1 200px; background: var(--sup); border: 1px solid var(--borda);
+  border-radius: 12px; padding: 14px 16px; font-size: 0.9rem;
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.hero-passo-num {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--cor-primaria); color: #fff; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; font-size: 0.85rem;
+}
+.hero-passos em { color: var(--texto-2); font-style: italic; }
+
+.hero-info-subtitulo { font-size: 1.1rem; margin: 8px 0 14px; }
+.hero-ferramentas-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: left; }
+.hero-tool-card {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--sup); border: 1px solid var(--borda); border-radius: 12px;
+  padding: 14px; cursor: pointer; color: var(--texto); font-family: var(--fonte);
+  text-align: left; transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.hero-tool-card:hover { border-color: var(--cor-primaria); transform: translateY(-2px); }
+.hero-tool-icone { font-size: 22px; line-height: 1; flex-shrink: 0; color: var(--cor-primaria); }
+.hero-tool-icone svg { width: 24px; height: 24px; display: block; }
+.hero-tool-texto { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hero-tool-nome { font-weight: 700; font-size: 0.95rem; }
+.hero-tool-desc { font-size: 0.8rem; color: var(--texto-2); line-height: 1.35; }
+
+/* Grade recolhida também no desktop: mostra 6 cartões (2 fileiras de 3) e o botão "Ver todas".
+   A dropzone continua sendo o elemento dominante da tela; a grade não compete mais com ela. */
+.hero-ferramentas-grid.recolhido .hero-tool-card:nth-child(n+7) { display: none; }
+.hero-ver-todas {
+  display: block; margin: 16px auto 0; background: none; border: 1px solid var(--borda);
+  color: var(--cor-primaria); padding: 10px 18px; border-radius: 8px; cursor: pointer;
+  font-weight: 600; font-family: var(--fonte);
+}
+.hero-info-privacidade { margin-top: 28px; color: var(--texto-2); font-size: 0.9rem; }
+
+@media (max-width: 900px) { .hero-ferramentas-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 700px) {
+  .hero-info-titulo { font-size: 1.25rem; }
+  .hero-passos { flex-direction: column; }
+}
+@media (max-width: 380px) {
+  .hero-ferramentas-grid { gap: 8px; }
+  .hero-tool-card { padding: 10px; }
+}
+
+/* Afordância de rolagem da barra de ferramentas: esmaece (fade) o lado que ainda
+   tem conteúdo fora da vista. Classes .rola-esq / .rola-dir são ligadas por JS
+   conforme a posição da rolagem. Só CSS, sem elemento extra. */
+.toolbar-ferramentas { --fade-barra: 26px; }
+.toolbar-ferramentas.rola-dir {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-barra)), transparent 100%);
+          mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-barra)), transparent 100%);
+}
+.toolbar-ferramentas.rola-esq {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-barra));
+          mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-barra));
+}
+.toolbar-ferramentas.rola-esq.rola-dir {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-barra), #000 calc(100% - var(--fade-barra)), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-barra), #000 calc(100% - var(--fade-barra)), transparent 100%);
+}
+
+/* =========================================================================
+   Respeitar "reduzir movimento" do sistema (prefers-reduced-motion)
+   =========================================================================
+   Zera durações de animação/transição e o scroll suave. O bloco global só mata a DURAÇÃO — o
+   deslocamento em si (translateY dos hovers de elevação) ainda aconteceria instantaneamente, então
+   os hovers de "pulo" são neutralizados um a um logo abaixo (a mudança de cor da borda continua
+   sinalizando o hover). NÃO se usa `transform: none` global de propósito: o `.pdf-toast` depende de
+   `translateX(-50%)` pra centralizar e seria quebrado. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .toolbar-btn:hover,
+  .pdf-dropzone-botao:hover,
+  .pdf-btn-principal:hover:not(:disabled),
+  .pdf-proximo-btn:hover,
+  .hero-tool-card:hover { transform: none; }
+}

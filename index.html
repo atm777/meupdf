@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta content='#0e1116' name='theme-color'/>
+  <meta content='yes' name='mobile-web-app-capable'/>
+  <meta content='yes' name='apple-mobile-web-app-capable'/>
+  <meta content='black-translucent' name='apple-mobile-web-app-status-bar-style'/>
+
+  <!-- App Identity -->
+  <meta content='Meu pdf' name='apple-mobile-web-app-title'/>
+  <title>Meu pdf - Edite, Junte e Assine PDF com Privacidade</title>
+
+  <!-- SEO & Meta Description -->
+  <meta content='Junte, divida, assine e comprima PDFs grátis. Processamento 100% no seu navegador: seus arquivos nunca são enviados para a nuvem. Rápido, seguro e privado.' name='description'/>
+  <meta content='editar pdf, juntar pdf, dividir pdf, comprimir pdf, assinar pdf, privacidade pdf, meu pdf, ferramentas pdf, sem upload' name='keywords'/>
+  <meta content='index, follow, max-image-preview:large' name='robots'/>
+
+  <!-- Open Graph Meta -->
+  <meta content='website' property='og:type'/>
+  <meta content='https://meupdf.app/' property='og:url'/>
+  <meta content='Meu pdf' property='og:site_name'/>
+  <meta content='pt_BR' property='og:locale'/>
+  <meta content='Meu pdf - Edite, Junte e Assine PDF com Privacidade' property='og:title'/>
+  <meta content='Junte, divida, assine e comprima PDFs grátis. Processamento 100% no seu navegador: seus arquivos nunca são enviados para a nuvem. Rápido, seguro e privado.' property='og:description'/>
+  <meta content='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjjY5kHP_ALUbLs1VLVOiplolMvGbRVE7ooKAMcLAJeS_iLuB2fu_9OQ8qJ6pCPp7eH08kwxY-rd_2Mk-FeFUhbMftH9H7b-BnbBPDlGMUcwEDc1smw0lKi_u3gpyjDq5htAG1gK8ND0cYR0mkeM6zJ7KbXjaJooL5mIrLOdUlRpHHu6rtncMipo2suJ3fc/s1200/banner.jpg' property='og:image'/>
+
+  <!-- Twitter Cards -->
+  <meta content='summary_large_image' name='twitter:card'/>
+  <meta content='Meu pdf - Edite, Junte e Assine PDF com Privacidade' name='twitter:title'/>
+  <meta content='Junte, divida, assine e comprima PDFs grátis. Processamento 100% no seu navegador: seus arquivos nunca são enviados para a nuvem. Rápido, seguro e privado.' name='twitter:description'/>
+  <meta content='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjjY5kHP_ALUbLs1VLVOiplolMvGbRVE7ooKAMcLAJeS_iLuB2fu_9OQ8qJ6pCPp7eH08kwxY-rd_2Mk-FeFUhbMftH9H7b-BnbBPDlGMUcwEDc1smw0lKi_u3gpyjDq5htAG1gK8ND0cYR0mkeM6zJ7KbXjaJooL5mIrLOdUlRpHHu6rtncMipo2suJ3fc/s1200/banner.jpg' name='twitter:image'/>
+
+  <!-- Favicon -->
+  <link href='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiTtXyS7k7w8ObvIOnMzcgLR5z5iKQawA2tB-jSHcEsp07X_APIUz9Tf7AVK6ct_JQSkvusO5oE-EKrCQMQtkROarmzfiBUp2IJFmFi7VrmChmdQo8SPY3FI9FZh9b9qHy8Q4q8EtXvURE85hUkcQ8II1yFEuW4iSbE1c8idmyNakw0ZTa2KyIhWAplGi2a/s192/favicon192.png' rel='icon'/>
+  <link href='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiTtXyS7k7w8ObvIOnMzcgLR5z5iKQawA2tB-jSHcEsp07X_APIUz9Tf7AVK6ct_JQSkvusO5oE-EKrCQMQtkROarmzfiBUp2IJFmFi7VrmChmdQo8SPY3FI9FZh9b9qHy8Q4q8EtXvURE85hUkcQ8II1yFEuW4iSbE1c8idmyNakw0ZTa2KyIhWAplGi2a/s192/favicon192.png' rel='icon' sizes='192x192' type='image/png'/>
+  <link href='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiTtXyS7k7w8ObvIOnMzcgLR5z5iKQawA2tB-jSHcEsp07X_APIUz9Tf7AVK6ct_JQSkvusO5oE-EKrCQMQtkROarmzfiBUp2IJFmFi7VrmChmdQo8SPY3FI9FZh9b9qHy8Q4q8EtXvURE85hUkcQ8II1yFEuW4iSbE1c8idmyNakw0ZTa2KyIhWAplGi2a/s192/favicon192.png' rel='apple-touch-icon'/>
+  <link href='https://meupdf.app/' rel='canonical'/>
+
+  <!-- PWA Web App Manifest -->
+  <link href='data:application/manifest+json,%7B%22id%22%3A%20%22%2F%22%2C%20%22name%22%3A%20%22Meu%20pdf%22%2C%20%22short_name%22%3A%20%22Meu%20pdf%22%2C%20%22description%22%3A%20%22Junte%2C%20divida%2C%20assine%20e%20comprima%20PDFs%20gr%C3%A1tis.%20Processamento%20100%25%20no%20seu%20navegador.%22%2C%20%22start_url%22%3A%20%22%2F%22%2C%20%22scope%22%3A%20%22%2F%22%2C%20%22display%22%3A%20%22standalone%22%2C%20%22background_color%22%3A%20%22%230e1116%22%2C%20%22theme_color%22%3A%20%22%230e1116%22%2C%20%22orientation%22%3A%20%22portrait-primary%22%2C%20%22lang%22%3A%20%22pt-BR%22%2C%20%22icons%22%3A%20%5B%7B%22src%22%3A%20%22https%3A%2F%2Fblogger.googleusercontent.com%2Fimg%2Fb%2FR29vZ2xl%2FAVvXsEiTtXyS7k7w8ObvIOnMzcgLR5z5iKQawA2tB-jSHcEsp07X_APIUz9Tf7AVK6ct_JQSkvusO5oE-EKrCQMQtkROarmzfiBUp2IJFmFi7VrmChmdQo8SPY3FI9FZh9b9qHy8Q4q8EtXvURE85hUkcQ8II1yFEuW4iSbE1c8idmyNakw0ZTa2KyIhWAplGi2a%2Fs192%2Ffavicon192.png%22%2C%20%22sizes%22%3A%20%22192x192%22%2C%20%22type%22%3A%20%22image%2Fpng%22%2C%20%22purpose%22%3A%20%22any%20maskable%22%7D%2C%20%7B%22src%22%3A%20%22https%3A%2F%2Fblogger.googleusercontent.com%2Fimg%2Fb%2FR29vZ2xl%2FAVvXsEgv2PQPR2-4pqjjwr8dn5atcxxTftjB8Zr5X2ZTRJhZQovYbtrsMrWfTYVqGmkv3KtCHndshMjHcuN3QBQ3yY4EtSAt6k1B7hNZ_DmG7XcWjgtWyZ-bXISMKUBuTRh4NCYctX0uqe-Q1p9mD0pJct_lNQWuB4MTRJOhbTgcbU1FHhIjtGF3VS0RaUX2ZMGy%2Fs512%2Ffavicon512.png%22%2C%20%22sizes%22%3A%20%22512x512%22%2C%20%22type%22%3A%20%22image%2Fpng%22%2C%20%22purpose%22%3A%20%22any%20maskable%22%7D%5D%7D' rel='manifest'/>
+  
+    <link href='https://cdn.jsdelivr.net' rel='preconnect'/>
+  <link href='https://cdn.jsdelivr.net' rel='dns-prefetch'/>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+
+
+
+<!-- Pages deploy (variante A): shell local; JS/libs via jsDelivr @v1.0.20 -->
+<header class='topo-toolbar' id='topo-toolbar'>
+  <a href='/' class='toolbar-logo-link'>
+    <img class='toolbar-logo' alt='Meu pdf' src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhdbtzPlcNnr6N1dv5uN-K9TIq3-HckMDuAwrE50cPzAuM5eg30eBgbNEavmvP964CbHydB6cwxPm2dYUUDEdGWtbG54v7H8b8g3q2ZYiGggwimcPBlwfHECQMDnFfgxDeNf2y4LaujKYZuBEvI2sBtwF1O4g63lv64kHlYJWlhuWGr-72Ept5hnImzhPZo/s192/favicon192.png'/>
+  </a>
+  <nav class='toolbar-ferramentas' id='toolbar-ferramentas' aria-label='Ferramentas'>
+    <!-- Os botões serão injetados aqui pelo JS -->
+  </nav>
+</header>
+
+<main id='conteudo'>
+  <div class='wrap'>
+
+
+
+      <!-- Container Dinâmico da Ferramenta -->
+      <div id='workspace'>
+        <div id='workspace-header'>
+          <div id='workspace-title' style='margin:0;'>Ferramenta</div>
+          <button id='btn-voltar'>← Voltar</button>
+        </div>
+        <div id='workspace-content'></div>
+      </div>
+
+      <!-- Área central: escolher o PDF (dropzone) ou prévia do PDF já carregado -->
+      <div id='hero-mesa'>
+        <div id='hero-dropzone-area'>
+          <!-- Dropzone ou prévia do PDF injetada pelo JS -->
+        </div>
+
+        <!-- Conteúdo informativo (estático no HTML para o buscador). O JS liga os cliques
+             dos cartões e esconde este bloco quando um PDF é carregado. -->
+        <section id='hero-info' aria-label='Sobre o Meu pdf'>
+          <h1 class='hero-info-titulo'>Ferramentas de PDF grátis, direto no navegador</h1>
+          <p class='hero-info-sub'>Edite, junte, comprima, assine e converta PDFs. Todo o processamento acontece no seu próprio aparelho — nenhum arquivo é enviado para servidor nenhum, sem upload.</p>
+
+          <ol class='hero-passos'>
+            <li><span class='hero-passo-num'>1</span> <span>Escolha o PDF na área acima <em>— ou clique direto numa ferramenta, sem carregar nada antes.</em></span></li>
+            <li><span class='hero-passo-num'>2</span> <span>Escolha a ferramenta na barra do topo (ou num cartão abaixo).</span></li>
+            <li><span class='hero-passo-num'>3</span> <span>Baixe o resultado, pronto no seu aparelho.</span></li>
+          </ol>
+
+          <h3 class='hero-info-subtitulo'>O que dá pra fazer</h3>
+          <div class='hero-ferramentas-grid recolhido' id='hero-ferramentas-grid'>
+            <button type='button' class='hero-tool-card' data-ferramenta='estudio_principal'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Editar</span><span class='hero-tool-desc'>Desenhe à mão livre, escreva texto ou grife com marca-texto direto sobre a página.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='juntar_pdfs'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Juntar</span><span class='hero-tool-desc'>Combine vários PDFs em um só, na ordem que você escolher.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='imagens_para_pdf'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Converter</span><span class='hero-tool-desc'>Transforme fotos e imagens (JPG, PNG, WebP) em um único PDF.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='comprimir_pdf'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Reduzir tamanho</span><span class='hero-tool-desc'>Diminua o peso do arquivo até o limite em MB que você precisar.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='tarjar_pdf'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Tarjar</span><span class='hero-tool-desc'>Cubra dados sigilosos com tarjas que apagam de verdade o texto por baixo.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='assinar_pdf'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Assinar</span><span class='hero-tool-desc'>Adicione sua assinatura, a data e textos sobre o documento.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='numerar_paginas'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Numerar</span><span class='hero-tool-desc'>Coloque numeração de páginas no cabeçalho ou no rodapé.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='marca_dagua'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Timbrar</span><span class='hero-tool-desc'>Aplique uma marca d'água de texto ou uma logo sobre todas as páginas.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='inspecionar_pdf'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Inspecionar metadados</span><span class='hero-tool-desc'>Veja e limpe os metadados (autor, programa, datas) que o PDF revela sobre você.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='pdf_para_imagens'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Exportar imagem</span><span class='hero-tool-desc'>Converta as páginas do PDF em imagens JPG, PNG ou WebP.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='extrair_texto'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Extrair texto</span><span class='hero-tool-desc'>Copie o texto das páginas para salvar como .txt ou .md.</span></span>
+            </button>
+            <button type='button' class='hero-tool-card' data-ferramenta='dividir_pdf'>
+              <span class='hero-tool-icone'></span>
+              <span class='hero-tool-texto'><span class='hero-tool-nome'>Dividir</span><span class='hero-tool-desc'>Separe o PDF em vários arquivos menores, por quantidade de páginas ou por tamanho.</span></span>
+            </button>
+          </div>
+          <button type='button' class='hero-ver-todas' id='hero-ver-todas' aria-expanded='false'>Ver todas as 12 ferramentas</button>
+
+          <p class='hero-info-privacidade'>🔒 Tudo roda aqui no seu navegador. Seus arquivos não saem do seu aparelho: nenhum upload, nenhum servidor.</p>
+        </section>
+      </div>
+
+
+
+    <!-- Gerenciamento de páginas e postagens do Blogger -->
+
+
+
+                <div class='corpo'></div>
+              </article>
+
+
+
+
+  </div>
+</main>
+
+<footer class='rodape'>
+  <div class='wrap'>
+    <p class='rodape-privacidade'>Seus arquivos nunca saem do seu aparelho: todo o processamento acontece aqui no seu navegador, sem enviar nada para servidor nenhum.</p>
+    <p>Meu pdf. 2026. Ferramentas gratuitas e seguras.</p>
+    <p>Contato: consultoriamasterpro@gmail.com</p>
+  </div>
+</footer>
+
+
+<script type='text/javascript'>
+//<![CDATA[
+(function () {
+  'use strict';
+
+  // Registro do Service Worker para PWA
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      try {
+                var swCode = `
+const CACHE_NAME = 'meupdf-v1.0.20';
+self.addEventListener('install', e => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.map(key => {
+        if (key !== CACHE_NAME) return caches.delete(key);
+      })
+    )).then(() => self.clients.claim())
+  );
+});
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      return cached || fetch(e.request).then(res => {
+        if (!res || res.status !== 200 || (res.type !== 'basic' && res.type !== 'cors')) return res;
+        const resClone = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, resClone));
+        return res;
+      });
+    }).catch(() => new Response('Offline'))
+  );
+});`;
+        var swUrl = URL.createObjectURL(new Blob([swCode], { type: 'application/javascript' }));
+        navigator.serviceWorker.register(swUrl).catch(function(){});
+      } catch (e) {}
+    });
+  }
+
+})();
+//]]>
+</script>
+
+
+<script type='text/javascript'>
+//<![CDATA[
+window.PDFTools = (function() {
+  const LIMITE_AVISO_MB = 100;
+  const libsCarregadas = {};
+  const ferramentasRegistradas = {};
+
+  const configLibs = {
+    'pdf-lib': 'https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/pdf-lib.min.js',
+    'pdfjs': 'https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/pdf.min.js'
+  };
+
+  const erros = {
+    'nao_e_pdf': { msg: 'Esse arquivo não é um PDF.', dica: 'Confira se você selecionou o arquivo certo.' },
+    'pdf_protegido': { msg: 'Esse PDF está protegido por senha.', dica: 'Remova a senha antes de usar esta ferramenta.' },
+    'pdf_corrompido': { msg: 'Não consegui ler esse PDF.', dica: 'O arquivo pode estar danificado.' },
+    'sem_paginas': { msg: 'Esse PDF não tem páginas.', dica: '' },
+    'memoria': { msg: 'O arquivo é grande demais para este aparelho.', dica: 'Tente num computador ou divida o arquivo antes.' },
+    'desconhecido': { msg: 'Algo deu errado.', dica: '' }
+  };
+
+  function registrar(config) {
+    ferramentasRegistradas[config.id] = config;
+  }
+
+  function carregarLib(nome) {
+    if (libsCarregadas[nome]) {
+      return libsCarregadas[nome];
+    }
+    
+    if (!configLibs[nome]) {
+      return Promise.reject(new Error(`Biblioteca ${nome} não configurada.`));
+    }
+
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = configLibs[nome];
+      script.onload = async () => {
+        if (nome === 'pdfjs' && window.pdfjsLib) {
+           await configurarWorkerPdfJs('https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/pdf.worker.min.js');
+           if (!window.__pdfjsGetDocumentOrig) {
+             window.__pdfjsGetDocumentOrig = window.pdfjsLib.getDocument;
+             window.__activePdfDocs = [];
+             window.pdfjsLib.getDocument = function(src) {
+               const task = window.__pdfjsGetDocumentOrig.call(window.pdfjsLib, src);
+               task.promise.then(doc => {
+                 window.__activePdfDocs.push(doc);
+                 // Ao destruir o doc (ex: prévia da Mesa), tira ele da lista — assim o array
+                 // não acumula referências de documentos já destruídos entre uma ação e outra.
+                 const destroyOrig = doc.destroy.bind(doc);
+                 doc.destroy = function() {
+                   const i = window.__activePdfDocs.indexOf(doc);
+                   if (i !== -1) window.__activePdfDocs.splice(i, 1);
+                   return destroyOrig();
+                 };
+               }).catch(() => {});
+               return task;
+             };
+           }
+        }
+        resolve();
+      };
+      script.onerror = () => reject(new Error(`Falha ao carregar ${nome}`));
+      document.head.appendChild(script);
+    });
+
+    libsCarregadas[nome] = promise;
+    return promise;
+  }
+
+  function lerComoArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function baixar(blob, nomeArquivo) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  }
+
+  function formatarTamanho(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const tamanhos = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const valor = parseFloat((bytes / Math.pow(k, i)).toFixed(1));
+    return valor.toLocaleString('pt-BR') + ' ' + tamanhos[i];
+  }
+
+  function nomeSemExtensao(nome) {
+    const ultimoPonto = nome.lastIndexOf('.');
+    if (ultimoPonto === -1) return nome;
+    return nome.substring(0, ultimoPonto);
+  }
+
+  function sanitizarNome(nome) {
+    return nome.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+  }
+
+  function ehPDF(file) {
+    return new Promise((resolve) => {
+      if (!file) return resolve(false);
+      
+      const leitor = new FileReader();
+      leitor.onload = function(e) {
+        const arr = new Uint8Array(e.target.result);
+        let header = "";
+        for(let i = 0; i < arr.length; i++) {
+          header += String.fromCharCode(arr[i]);
+        }
+        resolve(header === '%PDF');
+      };
+      leitor.onerror = () => resolve(false);
+      leitor.readAsArrayBuffer(file.slice(0, 4));
+    });
+  }
+
+  function ehImagem(file) {
+    return file && file.type.startsWith('image/');
+  }
+
+  function posicaoRotacionada(visX, visYTopo, boxW, boxH, rawW, rawH, anguloPagina) {
+    const R = ((Math.round(anguloPagina / 90) * 90) % 360 + 360) % 360;
+    let x, y, rotate;
+    if (R === 90) {
+      x = visYTopo + boxH; y = visX; rotate = 90;
+    } else if (R === 180) {
+      x = rawW - visX; y = visYTopo + boxH; rotate = 180;
+    } else if (R === 270) {
+      x = rawW - visYTopo - boxH; y = rawH - visX; rotate = 270;
+    } else {
+      x = visX; y = rawH - visYTopo - boxH; rotate = 0;
+    }
+    return { x, y, width: boxW, height: boxH, rotate };
+  }
+
+  function dimensoesVisuais(rawW, rawH, anguloPagina) {
+    const R = ((Math.round(anguloPagina / 90) * 90) % 360 + 360) % 360;
+    return (R === 90 || R === 270) ? { width: rawH, height: rawW } : { width: rawW, height: rawH };
+  }
+
+  function irParaFerramenta(id) {
+    document.dispatchEvent(new CustomEvent('pdftools:ir-para', { detail: { id } }));
+  }
+
+  function abrirComArquivo(id, blob, nomeArquivo) {
+    document.dispatchEvent(new CustomEvent('pdftools:ir-para', {
+      detail: { id: id, arquivo: new File([blob], nomeArquivo, { type: 'application/pdf' }) }
+    }));
+  }
+
+  // Histórico curto "Nesta sessão" (só desta aba - sessionStorage, some ao fechar ou voltar à
+  // home) pra dar a sensação de sessão contínua ao encadear ferramentas, sem precisar manter
+  // estado de UI entre navegações completas.
+  const CHAVE_SESSAO = 'pdftools_sessao';
+
+  function registrarAcaoSessao(texto) {
+    try {
+      const lista = obterHistoricoSessao();
+      lista.push(texto);
+      sessionStorage.setItem(CHAVE_SESSAO, JSON.stringify(lista));
+    } catch (e) {}
+  }
+
+  function obterHistoricoSessao() {
+    try {
+      return JSON.parse(sessionStorage.getItem(CHAVE_SESSAO) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function limparHistoricoSessao() {
+    try { sessionStorage.removeItem(CHAVE_SESSAO); } catch (e) {}
+  }
+
+  function escapeHTML(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>'"]/g, tag => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    }[tag] || tag));
+  }
+
+  function erro(codigo, detalhes = null) {
+    const info = erros[codigo] || erros['desconhecido'];
+    let html = `<strong>${info.msg}</strong>`;
+    if (info.dica) html += `<br><em>Dica: ${info.dica}</em>`;
+    if (detalhes) {
+      html += `<br><details style="margin-top:8px; font-size:12px; font-family:monospace; color:var(--erro);"><summary>Detalhes técnicos</summary><pre style="white-space:pre-wrap;">${escapeHTML(detalhes)}</pre></details>`;
+    }
+    return html;
+  }
+
+  function preCarregarOcioso() {
+    var agenda = window.requestIdleCallback || function (fn) { setTimeout(fn, 3000); };
+    agenda(function () {
+      carregarLib('pdf-lib').catch(function () {});
+      carregarLib('pdfjs').catch(function () {});
+    });
+  }
+
+  const makeCRCTable = function(){
+    let c;
+    let table = [];
+    for(let n =0; n < 256; n++){
+        c = n;
+        for(let k =0; k < 8; k++){
+            c = ((c&1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+        }
+        table[n] = c;
+    }
+    return table;
+  }
+  const crcTable = makeCRCTable();
+
+  function crc32(buf) {
+    let crc = 0 ^ (-1);
+    for (let i = 0; i < buf.length; i++ ) {
+        crc = (crc >>> 8) ^ crcTable[(crc ^ buf[i]) & 0xFF];
+    }
+    return (crc ^ (-1)) >>> 0;
+  }
+
+  async function gerarZip(arquivos, aoProgredir) {
+    const MAX_SIZE = 4 * 1024 * 1024 * 1024;
+    let totalEstimated = arquivos.reduce((sum, a) => sum + a.blob.size, 0);
+    if (totalEstimated > MAX_SIZE) {
+      throw new Error('Tamanho total excede 4 GB (requer ZIP64). Reduza a quantidade de arquivos.');
+    }
+
+    const chunks = [];
+    const centralDir = [];
+    let offset = 0;
+
+    const date = new Date();
+    const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() / 2);
+    const dosDate = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+
+    const encoder = new TextEncoder();
+
+    for (let i = 0; i < arquivos.length; i++) {
+      const arq = arquivos[i];
+      if (aoProgredir) aoProgredir(((i) / arquivos.length) * 100, `Montando ZIP (${i+1}/${arquivos.length})...`);
+      await new Promise(r => setTimeout(r, 0));
+
+      const nameBuf = encoder.encode(arq.nome);
+      const chunkBuf = await arq.blob.arrayBuffer();
+      const crc = crc32(new Uint8Array(chunkBuf));
+      const size = chunkBuf.byteLength;
+
+      const header = new Uint8Array(30 + nameBuf.length);
+      const view = new DataView(header.buffer);
+      view.setUint32(0, 0x04034b50, true);
+      view.setUint16(4, 20, true);
+      view.setUint16(6, 1 << 11, true);
+      view.setUint16(8, 0, true);
+      view.setUint16(10, dosTime, true);
+      view.setUint16(12, dosDate, true);
+      view.setUint32(14, crc, true);
+      view.setUint32(18, size, true);
+      view.setUint32(22, size, true);
+      view.setUint16(26, nameBuf.length, true);
+      view.setUint16(28, 0, true);
+      header.set(nameBuf, 30);
+
+      const cdfh = new ArrayBuffer(46 + nameBuf.length);
+      const cdfhView = new DataView(cdfh);
+      cdfhView.setUint32(0, 0x02014b50, true);
+      cdfhView.setUint16(4, 20, true);
+      cdfhView.setUint16(6, 20, true);
+      cdfhView.setUint16(8, 1 << 11, true);
+      cdfhView.setUint16(10, 0, true);
+      cdfhView.setUint16(12, dosTime, true);
+      cdfhView.setUint16(14, dosDate, true);
+      cdfhView.setUint32(16, crc, true);
+      cdfhView.setUint32(20, size, true);
+      cdfhView.setUint32(24, size, true);
+      cdfhView.setUint16(28, nameBuf.length, true);
+      cdfhView.setUint16(30, 0, true);
+      cdfhView.setUint16(32, 0, true);
+      cdfhView.setUint16(34, 0, true);
+      cdfhView.setUint16(36, 0, true);
+      cdfhView.setUint32(38, 0, true);
+      cdfhView.setUint32(42, offset, true);
+
+      const cdfhArray = new Uint8Array(cdfh);
+      cdfhArray.set(nameBuf, 46);
+      centralDir.push(cdfhArray);
+
+      chunks.push(header, new Uint8Array(chunkBuf));
+      offset += header.length + chunkBuf.byteLength;
+      
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    if (aoProgredir) aoProgredir(100, `Finalizando ZIP...`);
+    
+    let cdSize = 0;
+    for (const c of centralDir) cdSize += c.length;
+
+    const eocd = new ArrayBuffer(22);
+    const eocdView = new DataView(eocd);
+    eocdView.setUint32(0, 0x06054b50, true);
+    eocdView.setUint16(4, 0, true);
+    eocdView.setUint16(6, 0, true);
+    eocdView.setUint16(8, arquivos.length, true);
+    eocdView.setUint16(10, arquivos.length, true);
+    eocdView.setUint32(12, cdSize, true);
+    eocdView.setUint32(16, offset, true);
+    eocdView.setUint16(20, 0, true);
+
+    chunks.push(...centralDir);
+    chunks.push(new Uint8Array(eocd));
+
+    return new Blob(chunks, { type: 'application/zip' });
+  }
+
+  function liberarCanvas(canvas) {
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, 1, 1);
+    }
+  }
+
+  function limparMemoriaPDF() {
+    if (window.__activePdfDocs) {
+      // Copia e zera antes de destruir: doc.destroy() agora se remove da lista sozinho, então
+      // iterar a lista original enquanto ela muda pularia elementos.
+      const docs = window.__activePdfDocs.slice();
+      window.__activePdfDocs = [];
+      docs.forEach(doc => { try { doc.destroy(); } catch(e){} });
+    }
+  }
+
+  // ---- Sistema de ícones — FONTE ÚNICA de verdade -------------------------------------------
+  // Usado pela barra do topo, pelos cartões da home e pelo bloco "E agora?". SVG inline 24x24,
+  // traço 1.5, stroke=currentColor / fill=none: os ícones herdam a cor do texto do container e
+  // funcionam nos dois temas sem regra extra. O tamanho final é controlado por CSS em cada
+  // contexto. Cada valor é só o miolo do <svg> (paths); iconeSVG() embrulha no wrapper padrão.
+  const ICONES_SVG = {
+    'estudio_principal': '<path d="M13.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.5"/><path d="M8 12h4M8 15.5h3"/><path d="M18 3.1a1.8 1.8 0 0 1 2.6 2.5l-6.2 6.2-3.3.7.7-3.3z"/>',
+    'juntar_pdfs': '<rect x="3.5" y="8" width="10" height="12.5" rx="1.5"/><path d="M8 8V4.5A1.5 1.5 0 0 1 9.5 3H16l4.5 4.5V17a1.5 1.5 0 0 1-1.5 1.5h-5.5"/>',
+    'imagens_para_pdf': '<rect x="3" y="4.5" width="9.5" height="9.5" rx="1.5"/><circle cx="6" cy="7.5" r="1"/><path d="M3.5 13l2.7-2.7 2.3 2.3"/><path d="M13 9.5h3.5l3.5 3.5V19a1.5 1.5 0 0 1-1.5 1.5H14A1.5 1.5 0 0 1 12.5 19v-2"/><path d="M16.5 9.5V13H20"/>',
+    'comprimir_pdf': '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8.5 12.5l2.3 2.3M10.8 14.8V12.5M10.8 14.8H8.5"/><path d="M15.5 17.5l-2.3-2.3M13.2 15.2v2.3M13.2 15.2h2.3"/>',
+    'tarjar_pdf': '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 12h6"/><rect x="7" y="14.5" width="10" height="2.8" rx="0.6" fill="currentColor" stroke="none"/>',
+    'assinar_pdf': '<path d="M4 15.5c1.8 0 2-5.5 3.6-5.5s1 4.6 2.6 4.6 1.8-6.5 3.6-6.5 1 3.8 2.8 3.8"/><path d="M3 19.5h18"/>',
+    'numerar_paginas': '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/><path d="M8 8h4M8 11h3"/><path d="M10.8 15l1.6-1.1v5.3M10.6 19.2h3.4"/>',
+    'marca_dagua': '<path d="M5 21h14"/><path d="M19.3 13.7A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.7-1.8Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13"/>',
+    'inspecionar_pdf': '<path d="M12.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6.5"/><path d="M12.5 3v6h6"/><circle cx="14.5" cy="14.5" r="3.4"/><path d="M17 17l3 3"/>',
+    'pdf_para_imagens': '<path d="M11 3.5H6A1.5 1.5 0 0 0 4.5 5v9A1.5 1.5 0 0 0 6 15.5h4.5"/><path d="M11 3.5V8h4.5"/><rect x="11.5" y="10.5" width="9.5" height="9.5" rx="1.5"/><circle cx="14.5" cy="13.5" r="1"/><path d="M12 19l2.6-2.6 2 2 1.7-1.7 2.7 2.7"/>',
+    'extrair_texto': '<path d="M11.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6"/><path d="M11.5 3v6h6V7.5"/><path d="M13 12.5h8M13 15.5h8M13 18.5h5"/>',
+    'dividir_pdf': '<path d="M10.5 5H6a1.5 1.5 0 0 0-1.5 1.5v11A1.5 1.5 0 0 0 6 19h4.5"/><path d="M13.5 5H18a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 18 19h-4.5"/><path d="M12 3v2.5M12 9v2M12 14.5v2M12 20v1.5"/>',
+    // Ícones de INTERFACE (controles dentro das ferramentas) — mesmo padrão/fonte única dos ícones
+    // de ferramenta acima. Usados pelo seletor de modo do Editar (mão/lápis/texto/marca) e pelo
+    // botão de girar. Prefixo 'ui-' pra não colidir com ids de ferramenta.
+    'ui-mover': '<path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 12V5a1.5 1.5 0 0 1 3 0v7"/><path d="M14 12.5V7a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1.5a5 5 0 0 1-3.54-1.46l-3-3a1.5 1.5 0 0 1 2.12-2.12L8 15.5"/>',
+    'ui-lapis': '<path d="M17 3.1a1.8 1.8 0 0 1 2.6 2.5l-11 11L4.5 18l1.4-4.1z"/><path d="M14.5 5.6l3 3"/>',
+    'ui-texto': '<path d="M5 6.5V5h14v1.5"/><path d="M12 5.2v13.6"/><path d="M9.5 19h5"/>',
+    'ui-marca': '<path d="M12.5 14.5l-3 3H6.5v-3l3-3"/><path d="M11 10l5-5 3 3-5 5z"/><path d="M4.5 21h7"/>',
+    'ui-girar': '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3.5v5h-5"/>'
+  };
+  const ICONE_FALLBACK = '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>';
+  function iconeSVG(id) {
+    return '<svg class="pdf-icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+      + (ICONES_SVG[id] || ICONE_FALLBACK) + '</svg>';
+  }
+
+  return {
+    LIMITE_AVISO_MB,
+    ICONES_SVG,
+    iconeSVG,
+    registrar,
+    carregarLib,
+    lerComoArrayBuffer,
+    baixar,
+    liberarCanvas,
+    limparMemoriaPDF,
+    formatarTamanho,
+    nomeSemExtensao,
+    sanitizarNome,
+    ehPDF,
+    ehImagem,
+    erro,
+    posicaoRotacionada,
+    dimensoesVisuais,
+    irParaFerramenta,
+    abrirComArquivo,
+    registrarAcaoSessao,
+    obterHistoricoSessao,
+    limparHistoricoSessao,
+    preCarregarOcioso,
+    gerarZip,
+    obterFerramentas: () => Object.values(ferramentasRegistradas)
+  };
+})();
+
+
+async function configurarWorkerPdfJs(urlWorker) {
+  try {
+    const r = await fetch(urlWorker);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+  } catch (e) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = urlWorker;
+    console.warn('Worker via blob falhou, usando fallback:', e);
+  }
+}
+PDFTools.UI = (function() {
+  
+  function criarElemento(tag, classes = [], html = '') {
+    const el = document.createElement(tag);
+    if (classes.length > 0) el.classList.add(...classes);
+    if (html) el.innerHTML = html;
+    return el;
+  }
+
+  function criarDropzone(opcoes) {
+    const { multiplo = false, aceita = '.pdf', onArquivos, textoBotao = null, dica = null } = opcoes;
+
+    const container = criarElemento('div', ['pdf-dropzone']);
+    const alvo = multiplo ? 'os arquivos' : 'o arquivo';
+    const dicaHTML = dica ? `<div class="pdf-dropzone-dica">${dica}</div>` : '';
+    if (textoBotao) {
+      // Versão de destaque (home): botão sólido primeiro + texto de arraste + dica do que aceita.
+      container.classList.add('pdf-dropzone-destaque');
+      container.innerHTML = `
+        <div class="pdf-dropzone-icon">📄</div>
+        <button type="button" class="pdf-dropzone-botao">${textoBotao}</button>
+        <div class="pdf-dropzone-text">ou arraste ${alvo} para cá</div>
+        ${dicaHTML}
+        <input type="file" ${multiplo ? 'multiple' : ''} accept="${aceita}" style="display: none;">
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="pdf-dropzone-icon">📄</div>
+        <div class="pdf-dropzone-text">
+          Arraste ${alvo} para cá ou
+          <button type="button" class="pdf-btn-texto">clique para escolher</button>
+        </div>
+        ${dicaHTML}
+        <input type="file" ${multiplo ? 'multiple' : ''} accept="${aceita}" style="display: none;">
+      `;
+    }
+
+    const input = container.querySelector('input');
+    const btn = container.querySelector('button');
+
+    btn.addEventListener('click', () => input.click());
+    container.addEventListener('click', (e) => {
+      if (e.target !== btn && !btn.contains(e.target)) input.click();
+    });
+
+    input.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        onArquivos(Array.from(e.target.files));
+      }
+      input.value = '';
+    });
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      container.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      container.addEventListener(eventName, () => container.classList.add('arrastando'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      container.addEventListener(eventName, () => container.classList.remove('arrastando'), false);
+    });
+
+    container.addEventListener('drop', (e) => {
+      const arquivos = e.dataTransfer.files;
+      if (arquivos.length > 0) {
+        onArquivos(Array.from(arquivos));
+      }
+    });
+
+    return container;
+  }
+
+  function criarListaArquivos(arquivos, onRemover) {
+    const container = criarElemento('div', ['pdf-lista-arquivos']);
+    
+    arquivos.forEach((arq, index) => {
+      const item = criarElemento('div', ['pdf-arquivo-item']);
+      item.innerHTML = `
+        <span class="pdf-arquivo-nome"></span>
+        <span class="pdf-arquivo-tamanho">${PDFTools.formatarTamanho(arq.size)}</span>
+        <button type="button" class="pdf-btn-remover" aria-label="Remover arquivo" data-index="${index}">✕</button>
+      `;
+      item.querySelector('.pdf-arquivo-nome').textContent = arq.name;
+      
+      item.querySelector('.pdf-btn-remover').addEventListener('click', () => {
+        onRemover(index);
+      });
+      
+      container.appendChild(item);
+    });
+    
+    return container;
+  }
+
+  function criarProgresso() {
+    const container = criarElemento('div', ['pdf-progresso'], `
+      <div class="pdf-progresso-texto">Aguardando...</div>
+      <div class="pdf-progresso-barra-fundo">
+        <div class="pdf-progresso-barra-preenchimento" style="width: 0%"></div>
+      </div>
+    `);
+    
+    container.style.display = 'none';
+
+    return {
+      elemento: container,
+      atualizar: (porcentagem, texto) => {
+        container.style.display = 'block';
+        const barra = container.querySelector('.pdf-progresso-barra-preenchimento');
+        const txt = container.querySelector('.pdf-progresso-texto');
+        barra.style.width = `${porcentagem}%`;
+        if (texto) txt.textContent = texto;
+      },
+      esconder: () => {
+        container.style.display = 'none';
+      }
+    };
+  }
+
+  // Controle de zoom compartilhado pelos editores de página (Assinar, Tarjar, Editar):
+  // botões +/− num navegador/desktop e pinça de dois dedos no celular. `aoMudarZoom`
+  // recebe o fator (1 = tamanho de ajuste original calculado por cada ferramenta) e é quem re-
+  // renderiza a página + os itens posicionados nela na escala nova — a lógica de renderização
+  // continua em cada arquivo, aqui só fica o controle da interação de zoom em si.
+  function criarControleZoom(opcoes) {
+    const { superficieToque, aoMudarZoom, min = 0.5, max = 3 } = opcoes;
+    let zoom = 1;
+
+    const elemento = criarElemento('div', ['pdf-zoom-controle']);
+    elemento.innerHTML = `
+      <button type="button" class="pdf-zoom-btn" id="pdf-zoom-menos" title="Diminuir zoom" aria-label="Diminuir zoom">−</button>
+      <span class="pdf-zoom-valor">100%</span>
+      <button type="button" class="pdf-zoom-btn" id="pdf-zoom-mais" title="Aumentar zoom" aria-label="Aumentar zoom">+</button>
+      <button type="button" class="pdf-zoom-btn" id="pdf-zoom-lupa" title="Ajustar à tela" aria-label="Ajustar à tela">🔍</button>
+    `;
+    const valorEl = elemento.querySelector('.pdf-zoom-valor');
+
+    function definirZoom(novoZoom) {
+      zoom = Math.max(min, Math.min(max, novoZoom));
+      valorEl.textContent = Math.round(zoom * 100) + '%';
+      aoMudarZoom(zoom);
+    }
+
+    elemento.querySelector('#pdf-zoom-menos').onclick = () => definirZoom(zoom - 0.25);
+    elemento.querySelector('#pdf-zoom-mais').onclick = () => definirZoom(zoom + 0.25);
+    elemento.querySelector('#pdf-zoom-lupa').onclick = () => definirZoom(1);
+
+    // Pinça de dois dedos (mobile). Só intercepta quando há 2 toques — rolagem/toque único
+    // (arrastar item, tocar botão) seguem funcionando normalmente.
+    if (superficieToque) {
+      let distanciaInicial = null;
+      let zoomAoIniciarPinça = 1;
+
+      function distanciaEntreToques(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.hypot(dx, dy);
+      }
+
+      superficieToque.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          distanciaInicial = distanciaEntreToques(e.touches);
+          zoomAoIniciarPinça = zoom;
+        }
+      }, { passive: true });
+
+      superficieToque.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && distanciaInicial) {
+          e.preventDefault();
+          const distanciaAtual = distanciaEntreToques(e.touches);
+          definirZoom(zoomAoIniciarPinça * (distanciaAtual / distanciaInicial));
+        }
+      }, { passive: false });
+
+      superficieToque.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) distanciaInicial = null;
+      });
+    }
+
+    return { elemento, obterZoom: () => zoom, definirZoom };
+  }
+
+  // Navegador vertical de páginas compartilhado pelos editores de página (Assinar, Tarjar,
+  // Editar): setas ▲/▼ + número da página atual, pensado pra ficar do lado da própria página (não
+  // no topo). Como o modal do editor nunca fecha ao trocar de página, o `aoNavegar` de cada
+  // ferramenta só precisa chamar de novo a função que já abre uma página — zoom, tela cheia
+  // (quando existir) e o resto do estado do modal continuam intactos durante a troca.
+  function criarNavegadorPaginas(opcoes) {
+    const { aoNavegar } = opcoes;
+    let paginaAtual = 0;
+    let totalPaginas = 0;
+
+    const elemento = criarElemento('div', ['pdf-nav-paginas']);
+    elemento.innerHTML = `
+      <button type="button" class="pdf-nav-btn" id="pdf-nav-anterior" title="Página anterior" aria-label="Página anterior">▲</button>
+      <span class="pdf-nav-valor"></span>
+      <button type="button" class="pdf-nav-btn" id="pdf-nav-proxima" title="Próxima página" aria-label="Próxima página">▼</button>
+    `;
+    const valorEl = elemento.querySelector('.pdf-nav-valor');
+    const btnAnterior = elemento.querySelector('#pdf-nav-anterior');
+    const btnProxima = elemento.querySelector('#pdf-nav-proxima');
+
+    function atualizar(novaPaginaAtual, novoTotalPaginas) {
+      paginaAtual = novaPaginaAtual;
+      totalPaginas = novoTotalPaginas;
+      valorEl.textContent = `${paginaAtual + 1} / ${totalPaginas}`;
+      btnAnterior.disabled = paginaAtual <= 0;
+      btnProxima.disabled = paginaAtual >= totalPaginas - 1;
+    }
+
+    btnAnterior.onclick = () => { if (paginaAtual > 0) aoNavegar(paginaAtual - 1); };
+    btnProxima.onclick = () => { if (paginaAtual < totalPaginas - 1) aoNavegar(paginaAtual + 1); };
+
+    return { elemento, atualizar };
+  }
+
+  function criarBotaoPrincipal(texto, onClick) {
+    const btn = criarElemento('button', ['pdf-btn-principal']);
+    btn.textContent = texto;
+    btn.disabled = true;
+    btn.addEventListener('click', onClick);
+    return btn;
+  }
+
+  // Função pura: dado quem gerou o resultado e o tamanho dele, decide quais sugestões mostrar,
+  // em que ordem, e se alguma merece destaque visual. Sem tocar no DOM — fácil de ajustar a régua
+  // depois sem mexer na parte visual (criarProximosPassos).
+  function calcularSugestoes(origemId, tamanhoBytes) {
+    const MB = 1024 * 1024;
+    const acimaDe10MB = tamanhoBytes > 10 * MB;
+    const abaixoDe1MB = tamanhoBytes < 1 * MB;
+
+    // Abaixo de 1 MB, dividir/comprimir não fazem sentido — promove outras 3 tarefas comuns.
+    const ordemBase = abaixoDe1MB
+      ? ['estudio_principal', 'juntar_pdfs', 'tarjar_pdf', 'assinar_pdf']
+      : ['estudio_principal', 'dividir_pdf', 'comprimir_pdf', 'juntar_pdfs', 'tarjar_pdf'];
+
+    return ordemBase
+      .filter(id => id !== origemId) // nunca sugerir a ferramenta que acabou de rodar
+      .slice(0, 4)
+      .map(id => {
+        const destaque = id === 'estudio_principal' || (id === 'dividir_pdf' && acimaDe10MB);
+        const rotulo = id === 'estudio_principal' ? 'Continuar Editando' : (destaque ? 'acima de 10 MB' : null);
+        return { id, destaque, rotuloSecundario: rotulo };
+      });
+  }
+
+  // Monta o bloco "E agora?" pronto para a ferramenta anexar abaixo do botão de download.
+  // Retorna null quando não há sugestões (ex: origemId cobre tudo e o tamanho zera a lista).
+  function criarProximosPassos(opcoes) {
+    const { blob, nomeArquivo, origemId, tamanhoBytes } = opcoes;
+    const sugestoes = calcularSugestoes(origemId, tamanhoBytes);
+    if (sugestoes.length === 0) return null;
+
+    const wrap = criarElemento('div', ['pdf-proximos-passos']);
+    const titulo = criarElemento('div', ['pdf-proximos-titulo'], 'E agora?');
+    const grade = criarElemento('div', ['pdf-proximos-grid']);
+
+    const todasFerramentas = window.PDFTools.obterFerramentas();
+
+    sugestoes.forEach(s => {
+      const ferramenta = todasFerramentas.find(f => f.id === s.id);
+      const nome = ferramenta ? ferramenta.nome : s.id;
+      const btn = criarElemento('button', ['pdf-proximo-btn']);
+      btn.type = 'button';
+      if (s.destaque) btn.classList.add('destaque');
+      btn.innerHTML = `
+        <span class="pdf-proximo-icone">${window.PDFTools.iconeSVG(s.id)}</span>
+        <span class="pdf-proximo-nome">${nome}</span>
+        ${s.rotuloSecundario ? `<span class="pdf-proximo-rotulo">${s.rotuloSecundario}</span>` : ''}
+      `;
+      btn.addEventListener('click', () => {
+        window.PDFTools.abrirComArquivo(s.id, blob, nomeArquivo);
+      });
+      grade.appendChild(btn);
+    });
+
+    wrap.appendChild(titulo);
+    wrap.appendChild(grade);
+
+    const historico = window.PDFTools.obterHistoricoSessao();
+    if (historico.length > 0) {
+      const hist = criarElemento('div', ['pdf-sessao-historico']);
+      hist.appendChild(criarElemento('div', ['pdf-sessao-titulo'], 'Nesta sessão'));
+      historico.forEach(texto => {
+        hist.appendChild(criarElemento('div', ['pdf-sessao-item'], `<span class="pdf-sessao-item-check">✓</span>${texto}`));
+      });
+      wrap.appendChild(hist);
+    }
+
+    return wrap;
+  }
+
+  // Pilha global de modais abertos (só o do topo trata Esc/Tab) — cobre o caso do Assinar, que
+  // abre "criar assinatura"/"desenho livre" por cima do editor de página.
+  const pilhaModais = [];
+  const SELETOR_FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  // Torna acessível um modal que é um overlay escondido/mostrado via style.display (o padrão dos
+  // editores de página). Aplicado UMA vez por modal — detecta abrir/fechar observando o próprio
+  // style, então não precisa ser chamado em cada ponto de abrir/fechar. Faz:
+  //  - role="dialog" + aria-modal="true" + aria-label;
+  //  - move o foco pra dentro ao abrir (primeiro controle útil, nunca o canvas) e devolve ao
+  //    elemento de origem ao fechar;
+  //  - prende o foco (Tab/Shift+Tab circulam só dentro do modal do topo da pilha);
+  //  - Esc fecha (clicando no botão de fechar do próprio modal, pra reaproveitar o cleanup dele).
+  // Precedência do Esc: o listener é de fase BUBBLE, então um textarea que faz stopPropagation
+  // (a caixa de texto do Editar, que trata Esc como "confirmar") commita primeiro e só o Esc
+  // seguinte chega aqui pra fechar; e em tela cheia o Esc é do navegador (sai da tela cheia) —
+  // detectado por document.fullscreenElement e ignorado aqui, sem fechar o modal junto.
+  function tornarModalAcessivel(el, opcoes = {}) {
+    if (!el) return { destruir() {} };
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    if (opcoes.rotulo) el.setAttribute('aria-label', opcoes.rotulo);
+    else if (opcoes.rotuladoPor) el.setAttribute('aria-labelledby', opcoes.rotuladoPor);
+
+    let opener = null;
+    const estaAberto = () => window.getComputedStyle(el).display !== 'none';
+    const focaveis = () => Array.from(el.querySelectorAll(SELETOR_FOCAVEIS))
+      .filter(f => f.offsetWidth > 0 || f.offsetHeight > 0 || f === document.activeElement);
+    // Só o modal do topo (aberto e ainda no DOM) trata teclado — ignora entradas obsoletas.
+    const ehTopo = () => {
+      const vivos = pilhaModais.filter(m => document.contains(m) && window.getComputedStyle(m).display !== 'none');
+      return vivos[vivos.length - 1] === el;
+    };
+
+    function aoTeclado(e) {
+      if (!ehTopo()) return;
+      if (e.key === 'Escape') {
+        if (document.fullscreenElement) return; // Esc sai da tela cheia; é do navegador
+        e.preventDefault();
+        if (typeof opcoes.aoFecharPorEsc === 'function') opcoes.aoFecharPorEsc();
+        else { const b = typeof opcoes.botaoFechar === 'function' ? opcoes.botaoFechar() : opcoes.botaoFechar; if (b) b.click(); }
+        return;
+      }
+      if (e.key === 'Tab') {
+        const lista = focaveis();
+        if (lista.length === 0) { e.preventDefault(); return; }
+        const primeiro = lista[0], ultimo = lista[lista.length - 1], ativo = document.activeElement;
+        if (e.shiftKey && (ativo === primeiro || !el.contains(ativo))) { e.preventDefault(); ultimo.focus(); }
+        else if (!e.shiftKey && (ativo === ultimo || !el.contains(ativo))) { e.preventDefault(); primeiro.focus(); }
+      }
+    }
+
+    function aoAbrir() {
+      opener = document.activeElement;
+      if (pilhaModais.indexOf(el) === -1) pilhaModais.push(el);
+      document.addEventListener('keydown', aoTeclado, false);
+      requestAnimationFrame(() => {
+        let alvo = typeof opcoes.focoInicial === 'function' ? opcoes.focoInicial() : null;
+        if (!alvo) alvo = focaveis().find(f => f.tagName !== 'CANVAS') || el;
+        try { alvo.focus(); } catch (e2) {}
+      });
+    }
+    function aoFechar() {
+      document.removeEventListener('keydown', aoTeclado, false);
+      const i = pilhaModais.indexOf(el); if (i !== -1) pilhaModais.splice(i, 1);
+      if (opener && document.contains(opener)) { try { opener.focus(); } catch (e2) {} }
+      opener = null;
+    }
+
+    let aberto = estaAberto();
+    if (aberto) aoAbrir();
+    const obs = new MutationObserver(() => {
+      const agora = estaAberto();
+      if (agora && !aberto) { aberto = true; aoAbrir(); }
+      else if (!agora && aberto) { aberto = false; aoFechar(); }
+    });
+    obs.observe(el, { attributes: true, attributeFilter: ['style'] });
+
+    return { destruir() { obs.disconnect(); aoFechar(); } };
+  }
+
+  function mostrarToast(mensagem, tipo = 'info') {
+    const toast = criarElemento('div', ['pdf-toast', `pdf-toast-${tipo}`]);
+    toast.setAttribute('aria-live', 'polite');
+    toast.textContent = mensagem; // texto simples: nada de HTML vindo de mensagem de erro/arquivo
+    
+    document.body.appendChild(toast);
+    
+    requestAnimationFrame(() => toast.classList.add('visivel'));
+    
+    setTimeout(() => {
+      toast.classList.remove('visivel');
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
+  }
+
+  return {
+    criarElemento,
+    criarDropzone,
+    criarListaArquivos,
+    criarProgresso,
+    criarBotaoPrincipal,
+    criarControleZoom,
+    criarNavegadorPaginas,
+    tornarModalAcessivel,
+    mostrarToast,
+    calcularSugestoes,
+    criarProximosPassos
+  };
+})();
+
+//]]>
+</script>
+
+  <!-- Ferramentas -->
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/imagens-para-pdf.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/juntar.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/estudio.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/organizar.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/comprimir.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/tarjar.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/carimbar.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/assinar.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/pdf-para-imagens.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/extrair-texto.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/atm777/meupdf@v1.0.20/inspecionar.js"></script>
+
+<script type='text/javascript'>
+//<![CDATA[
+(function () {
+  'use strict';
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    const toolbarFerramentas = document.getElementById('toolbar-ferramentas');
+    const heroMesa = document.getElementById('hero-mesa');
+    const heroDropArea = document.getElementById('hero-dropzone-area');
+    const workspace = document.getElementById('workspace');
+    const workspaceContent = document.getElementById('workspace-content');
+    const workspaceTitle = document.getElementById('workspace-title');
+    const btnVoltar = document.getElementById('btn-voltar');
+    const heroInfo = document.getElementById('hero-info');
+
+    if (!toolbarFerramentas || !heroMesa) return;
+
+    const ferramentas = window.PDFTools ? window.PDFTools.obterFerramentas() : [];
+    let cleanupFerramentaAtiva = null;
+    let arquivoEstagiado = null;
+    let arquivoPreviaAtual = null;
+
+    // --- Rotas por hash (#/slug) ---------------------------------------------------------
+    // Tabela única slug (legível, em português) → id interno da ferramenta. É a fonte de
+    // verdade da navegação: mudar o hash abre a ferramenta; voltar (botão do navegador ou
+    // "← Voltar") volta pra home. O arquivo NUNCA vai na URL — a rota sempre abre na tela de
+    // upload, exceto quando já há um arquivo estagiado no momento do clique.
+    const ROTAS = {
+      'editar': 'estudio_principal',
+      'juntar': 'juntar_pdfs',
+      'converter': 'imagens_para_pdf',
+      'reduzir': 'comprimir_pdf',
+      'tarjar': 'tarjar_pdf',
+      'assinar': 'assinar_pdf',
+      'numerar': 'numerar_paginas',
+      'timbrar': 'marca_dagua',
+      'inspecionar': 'inspecionar_pdf',
+      'exportar': 'pdf_para_imagens',
+      'extrair': 'extrair_texto',
+      'dividir': 'dividir_pdf'
+    };
+    const ID_PARA_SLUG = Object.fromEntries(Object.entries(ROTAS).map(([slug, id]) => [id, slug]));
+
+    // Título/descrição da home, capturados do próprio documento para ajustar por rota e
+    // devolver ao voltar (link compartilhado de uma ferramenta faz sentido no buscador/preview).
+    const TITULO_HOME = document.title;
+    const metaDescEl = document.querySelector('meta[name="description"]');
+    const DESC_HOME = metaDescEl ? metaDescEl.getAttribute('content') : '';
+
+    // Arquivo a repassar para a próxima rota (some assim que consumido). Necessário porque a
+    // troca de ferramenta passa pelo hashchange, e o arquivo não pode ir na URL.
+    let arquivoParaProximaRota = null;
+
+    function aplicarMeta(id) {
+      const f = id ? ferramentas.find(x => x.id === id) : null;
+      if (f) {
+        document.title = f.nome + ' — Meu pdf';
+        if (metaDescEl && f.descricao) metaDescEl.setAttribute('content', f.descricao);
+      } else {
+        document.title = TITULO_HOME;
+        if (metaDescEl) metaDescEl.setAttribute('content', DESC_HOME);
+      }
+    }
+
+    // Ícones da barra: mesma fonte única de PDFTools.iconeSVG (ver ICONES_SVG no núcleo).
+
+    // Ordem de exibição na barra de ferramentas (topo), numa única fileira. `verbo` (+ `verbo2`
+    // opcional, numa segunda linha) é o rótulo mostrado sob o ícone — duas palavras quando uma
+    // só deixava a ação ambígua (ex: "Exportar" sozinho não diz pra quê). Todos os botões
+    // começam desabilitados/translúcidos e só ativam quando um PDF é carregado na mesa central.
+    const FERRAMENTAS_HOME = [
+      { id: 'estudio_principal', verbo: 'Editar' },
+      { id: 'juntar_pdfs', verbo: 'Juntar' },
+      { id: 'imagens_para_pdf', verbo: 'Converter' },
+      { id: 'comprimir_pdf', verbo: 'Reduzir', verbo2: 'Tamanho' },
+      { id: 'tarjar_pdf', verbo: 'Tarjar' },
+      { id: 'assinar_pdf', verbo: 'Assinar' },
+      { id: 'numerar_paginas', verbo: 'Numerar' },
+      { id: 'marca_dagua', verbo: 'Timbrar' },
+      { id: 'inspecionar_pdf', verbo: 'Inspecionar', verbo2: 'Metadados' },
+      { id: 'pdf_para_imagens', verbo: 'Exportar', verbo2: 'Imagem' },
+      { id: 'extrair_texto', verbo: 'Extrair', verbo2: 'Txt' },
+      { id: 'dividir_pdf', verbo: 'Dividir' }
+    ];
+
+    // Ponto único de entrada no workspace de uma ferramenta — usado tanto pelo clique na
+    // barra de ferramentas quanto pelo evento pdftools:ir-para (troca de ferramenta com
+    // arquivo já carregado).
+    function abrirFerramenta(id, arquivo) {
+      const ferramenta = ferramentas.find(f => f.id === id);
+      if (!ferramenta) return;
+      heroMesa.style.display = 'none';
+      workspace.style.display = 'block';
+      workspaceTitle.textContent = ferramenta.nome;
+      workspaceContent.innerHTML = '';
+      if (cleanupFerramentaAtiva) { cleanupFerramentaAtiva(); cleanupFerramentaAtiva = null; }
+      if (PDFTools.limparMemoriaPDF) PDFTools.limparMemoriaPDF();
+      const cleanup = ferramenta.montarUI(workspaceContent, arquivo);
+      if (typeof cleanup === 'function') cleanupFerramentaAtiva = cleanup;
+      aplicarMeta(id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderizarToolbar() {
+      toolbarFerramentas.innerHTML = '';
+      if (ferramentas.length === 0) return;
+
+      FERRAMENTAS_HOME.forEach(cfg => {
+        const f = ferramentas.find(ff => ff.id === cfg.id);
+        if (!f) return;
+        const icone = window.PDFTools.iconeSVG(f.id);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toolbar-btn';
+        btn.setAttribute('aria-label', f.nome);
+        btn.title = f.nome;
+        const rotuloHTML = cfg.verbo2
+          ? `<span class="toolbar-btn-rotulo">${cfg.verbo}</span><span class="toolbar-btn-rotulo">${cfg.verbo2}</span>`
+          : `<span class="toolbar-btn-rotulo">${cfg.verbo}</span>`;
+        btn.innerHTML = `<span class="toolbar-btn-icone">${icone}</span>${rotuloHTML}`;
+
+        // Sem PDF na Mesa de Trabalho, `arquivoEstagiado` é null — a própria ferramenta cai na
+        // tela de upload dela (todo `montarUI` já trata arquivoInicial ausente dessa forma).
+        btn.onclick = () => navegarPara(f.id, arquivoEstagiado);
+
+        toolbarFerramentas.appendChild(btn);
+      });
+    }
+
+    // Dropzone central (estado inicial / após "Trocar arquivo")
+    function montarDropzoneHero() {
+      heroDropArea.innerHTML = '';
+      heroDropArea.appendChild(window.PDFTools.UI.criarDropzone({
+        multiplo: false,
+        aceita: '.pdf, application/pdf',
+        textoBotao: 'Escolher PDF',
+        dica: 'Aceita arquivos <strong>PDF</strong>. Para <strong>Converter</strong> (imagens → PDF) use JPG, PNG ou WebP; <strong>Juntar</strong> aceita vários arquivos de uma vez.',
+        onArquivos: (arquivos) => selecionarArquivo(arquivos[0])
+      }));
+    }
+
+    function selecionarArquivo(file) {
+      arquivoEstagiado = file;
+      sincronizarHero();
+    }
+
+    // Renderiza a miniatura da 1ª página do PDF escolhido, para a pessoa ver o que abriu
+    // antes de decidir qual ferramenta usar.
+    async function mostrarPreviaPdf(file) {
+      heroDropArea.innerHTML = '<div style="padding:40px; text-align:center; color:var(--texto-2);">Carregando prévia...</div>';
+      try {
+        await window.PDFTools.carregarLib('pdfjs');
+        const buffer = await window.PDFTools.lerComoArrayBuffer(file);
+        const doc = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+        const numPaginas = doc.numPages;
+        const page = await doc.getPage(1);
+        const viewportBase = page.getViewport({ scale: 1 });
+        // Renderiza na maior resolução que a altura da tela permite (68vh, como no CSS),
+        // já multiplicada pelo devicePixelRatio para não ficar borrado em telas retina.
+        // A largura acompanha proporcionalmente — é o mesmo scale aplicado nos dois eixos.
+        const dpr = window.devicePixelRatio || 1;
+        const alturaAlvoCss = Math.min(window.innerHeight * 0.68, 1400);
+        const scale = (alturaAlvoCss * dpr) / viewportBase.height;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        try { doc.destroy(); } catch (e) {}
+
+        if (arquivoEstagiado !== file) return; // a pessoa trocou de arquivo enquanto renderizava
+
+        heroDropArea.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'hero-preview';
+        wrap.appendChild(canvas);
+
+        const nome = document.createElement('div');
+        nome.className = 'hero-preview-nome';
+        nome.textContent = file.name;
+        wrap.appendChild(nome);
+
+        const meta = document.createElement('div');
+        meta.className = 'hero-preview-meta';
+        meta.textContent = `${numPaginas} página(s) · ${window.PDFTools.formatarTamanho(file.size)} — escolha uma ferramenta no topo.`;
+        wrap.appendChild(meta);
+
+        const btnTrocar = document.createElement('button');
+        btnTrocar.type = 'button';
+        btnTrocar.className = 'hero-preview-trocar';
+        btnTrocar.textContent = '↺ Trocar arquivo';
+        btnTrocar.onclick = () => {
+          arquivoEstagiado = null;
+          sincronizarHero();
+        };
+        wrap.appendChild(btnTrocar);
+
+        heroDropArea.appendChild(wrap);
+      } catch (err) {
+        if (arquivoEstagiado !== file) return;
+        arquivoEstagiado = null;
+        arquivoPreviaAtual = null;
+        const codigo = (err && err.name === 'PasswordException') ? 'pdf_protegido' : 'pdf_corrompido';
+        heroDropArea.innerHTML = `<div>${window.PDFTools.erro(codigo, err && err.message)}</div>`;
+        const btnTentar = document.createElement('button');
+        btnTentar.type = 'button';
+        btnTentar.className = 'hero-preview-trocar';
+        btnTentar.textContent = '↺ Tentar outro arquivo';
+        btnTentar.onclick = () => montarDropzoneHero();
+        heroDropArea.appendChild(btnTentar);
+      }
+    }
+
+    // Garante que a área central (dropzone x prévia) reflete o arquivo atualmente estagiado.
+    function sincronizarHero() {
+      if (arquivoEstagiado) {
+        if (heroInfo) heroInfo.style.display = 'none';
+        if (arquivoPreviaAtual !== arquivoEstagiado) {
+          arquivoPreviaAtual = arquivoEstagiado;
+          mostrarPreviaPdf(arquivoEstagiado);
+        }
+      } else {
+        if (heroInfo) heroInfo.style.display = '';
+        arquivoPreviaAtual = null;
+        montarDropzoneHero();
+      }
+    }
+
+    btnVoltar.setAttribute('tabindex', '0');
+    btnVoltar.setAttribute('role', 'button');
+    btnVoltar.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        btnVoltar.click();
+      }
+    };
+    // Volta pra home mantendo o cleanup no MESMO lugar que a rota usa (sem duplicar lógica).
+    function mostrarHome() {
+      workspace.style.display = 'none';
+      if (cleanupFerramentaAtiva) { cleanupFerramentaAtiva(); cleanupFerramentaAtiva = null; }
+      if (PDFTools.limparMemoriaPDF) PDFTools.limparMemoriaPDF();
+      if (PDFTools.limparHistoricoSessao) PDFTools.limparHistoricoSessao();
+      workspaceContent.innerHTML = '';
+      heroMesa.style.display = 'flex';
+      aplicarMeta(null);
+      sincronizarHero();
+    }
+
+    // Navegação por ação do usuário (cartão, botão da barra, encadeamento): empilha no histórico
+    // via hash; quem realmente abre a ferramenta é o tratarRota() no hashchange, pra não duplicar
+    // o caminho de abertura. Se o hash já for o da ferramenta (re-clique), abre direto.
+    function navegarPara(id, arquivo) {
+      const slug = ID_PARA_SLUG[id];
+      if (!slug) { abrirFerramenta(id, arquivo); return; }
+      const novoHash = '#/' + slug;
+      if (location.hash === novoHash) {
+        abrirFerramenta(id, arquivo);
+      } else {
+        arquivoParaProximaRota = arquivo || null;
+        location.hash = novoHash;
+      }
+    }
+
+    // Lê o hash atual e reflete a tela (ferramenta ou home). Hash desconhecido → home, sem erro.
+    function tratarRota() {
+      const m = (location.hash || '').match(/^#\/(.+)$/);
+      const slug = m ? m[1] : null;
+      const id = slug ? ROTAS[slug] : null;
+      if (id) {
+        const arq = arquivoParaProximaRota;
+        arquivoParaProximaRota = null;
+        abrirFerramenta(id, arq);
+      } else {
+        arquivoParaProximaRota = null;
+        mostrarHome();
+      }
+    }
+
+    window.addEventListener('hashchange', tratarRota);
+
+    btnVoltar.onclick = () => {
+      // Muda o hash pra home; o hashchange chama mostrarHome() (mesmo cleanup da rota). Se já
+      // não houver hash de ferramenta, chama direto. Nunca usa history.back() (não sair do site).
+      if (location.hash && location.hash !== '#/') location.hash = '#/';
+      else mostrarHome();
+    };
+
+    document.addEventListener('pdftools:ir-para', (e) => {
+       if (e.detail.arquivo) arquivoEstagiado = e.detail.arquivo;
+       navegarPara(e.detail.id, e.detail.arquivo);
+    });
+
+    // Cartões da home informativa: mesmo caminho de navegação dos botões da barra. O ícone SVG
+    // vem da MESMA fonte única (PDFTools.iconeSVG) — o span estático fica vazio no HTML.
+    document.querySelectorAll('.hero-tool-card').forEach(card => {
+      const spanIcone = card.querySelector('.hero-tool-icone');
+      if (spanIcone && window.PDFTools) spanIcone.innerHTML = window.PDFTools.iconeSVG(card.dataset.ferramenta);
+      card.addEventListener('click', () => navegarPara(card.dataset.ferramenta, arquivoEstagiado));
+    });
+
+    // "Ver todas as ferramentas" (só aparece no mobile, via CSS): expande/recolhe a grade.
+    const btnVerTodas = document.getElementById('hero-ver-todas');
+    const gradeInfo = document.getElementById('hero-ferramentas-grid');
+    if (btnVerTodas && gradeInfo) {
+      btnVerTodas.onclick = () => {
+        const recolhido = gradeInfo.classList.toggle('recolhido');
+        btnVerTodas.textContent = recolhido ? 'Ver todas as 12 ferramentas' : 'Ver menos';
+        btnVerTodas.setAttribute('aria-expanded', String(!recolhido));
+      };
+    }
+
+    // Afordância de rolagem da barra: liga .rola-esq/.rola-dir conforme a posição da rolagem,
+    // esmaecendo o lado que ainda tem ferramenta fora da vista (só CSS + este listener).
+    function atualizarAfordanciaBarra() {
+      const el = toolbarFerramentas;
+      const max = el.scrollWidth - el.clientWidth;
+      el.classList.toggle('rola-esq', el.scrollLeft > 2);
+      el.classList.toggle('rola-dir', max > 2 && el.scrollLeft < max - 2);
+    }
+    toolbarFerramentas.addEventListener('scroll', atualizarAfordanciaBarra, { passive: true });
+    window.addEventListener('resize', atualizarAfordanciaBarra);
+
+    renderizarToolbar();
+    requestAnimationFrame(atualizarAfordanciaBarra);
+    tratarRota(); // reflete o hash inicial: abre a ferramenta se a URL já tiver #/slug, senão home
+
+    /**
+     * Initiates background prefetching of PDF tools.
+     */
+    setTimeout(() => {
+      if (window.PDFTools && window.PDFTools.preCarregarOcioso) {
+        window.PDFTools.preCarregarOcioso();
+      }
+    });
+  });
+})();
+//]]>
+</script>
+
+
+</body>
+</html>
+
