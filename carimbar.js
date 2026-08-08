@@ -286,7 +286,8 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
       try {
         const conf = lerConfiguracao();
         
-        // Aplica a edição em memória apenas para a página selecionada
+        // Documento descartavel so pra previa: carimba UMA pagina e e jogado fora. O arqBuffer
+        // original nunca e tocado, senao previas sucessivas iriam empilhando carimbos.
         const docTemp = await window.PDFLib.PDFDocument.load(arqBuffer.slice(0), { ignoreEncryption:true });
         const numTotal = docTemp.getPageCount();
         
@@ -318,7 +319,6 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
         const doc = await window.PDFLib.PDFDocument.load(arqBuffer, { ignoreEncryption:true });
         const numTotal = doc.getPageCount();
         
-        // Array com todos os índices
         const todasAsPag = Array.from({length: numTotal}, (_, i) => i);
         
         progresso.atualizar(20, 'Aplicando carimbos...');
@@ -370,7 +370,7 @@ PDFTools.registrar({
   montarUI: (container, arquivoInicial) => montarCarimboUI(container, 'marca', arquivoInicial)
 });
 
-// Hex to {r,g,b} 0-1
+// #rrggbb -> {r,g,b} em 0-1, que e a escala que o rgb() do pdf-lib espera (nao 0-255).
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result ? {
@@ -394,6 +394,14 @@ async function aplicarCarimbo(pdfDoc, indicesPags, conf, totalPagsOriginal) {
 
   // Fonte WinAnsi cobre português (ç, ã, é) nativamente no PDF
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  // Bloqueia caractere fora do WinAnsi (travessão "—", aspas curvas, emoji) ANTES de desenhar —
+  // senão estoura no drawText no meio da geração e cai num toast genérico que não diz qual caractere.
+  const textoUsuario = (conf.modo === 'marca' && conf.tipoMarca === 'texto') ? (conf.texto || '') : '';
+  const charRuim = textoUsuario ? PDFTools.encontrarCaractereNaoSuportado(font, textoUsuario) : null;
+  if (charRuim) {
+    throw new Error('O caractere "' + charRuim + '" não é suportado pela fonte do carimbo. Troque-o (ex.: "—" por "-", aspas curvas por retas) e tente de novo.');
+  }
 
   for (let i of indicesPags) {
     if (conf.modo === 'num' && (i + 1) < conf.iniciarPag) continue; // Pula capa

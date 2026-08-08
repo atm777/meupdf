@@ -45,6 +45,9 @@ PDFTools.registrar({
             return window.PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
           }).then(doc => {
             item.numPages = doc.getPageCount();
+            // A contagem usa ignoreEncryption:true e "funciona" para PDF protegido; mas o juntarPDFs
+            // usa load() sem a flag e falha na hora de gerar. Marcamos aqui p/ avisar na lista (C4).
+            item.protegido = !!doc.isEncrypted;
             item.carregando = false;
             renderLista();
           }).catch(e => {
@@ -86,7 +89,7 @@ PDFTools.registrar({
     colDir.innerHTML = `
       <div class="ft-opcoes-grupo">
         <label>
-          <input type="checkbox" id="opt-branco">
+          <input type="checkbox" id="jt-opt-branco">
           <div>
             <strong>Página em branco</strong>
             <span class="dica">Insere separador entre documentos (útil para impressão frente e verso).</span>
@@ -95,7 +98,7 @@ PDFTools.registrar({
       </div>
       <div class="ft-opcoes-grupo">
         <label>
-          <input type="checkbox" id="opt-metadados" checked>
+          <input type="checkbox" id="jt-opt-metadados" checked>
           <div>
             <strong>Limpar metadados</strong>
             <span class="dica">Remove autor e dados do documento. Evita que dados do 1º arquivo vazem para o resultado.</span>
@@ -106,7 +109,7 @@ PDFTools.registrar({
         <label>
           <strong>Nome do Arquivo</strong>
         </label>
-        <input type="text" id="opt-nome" class="ft-input" value="juntado-${new Date().toISOString().split('T')[0]}">
+        <input type="text" id="jt-opt-nome" class="ft-input" value="juntado-${new Date().toISOString().split('T')[0]}">
       </div>
     `;
 
@@ -131,8 +134,8 @@ PDFTools.registrar({
         await PDFTools.carregarLib('pdf-lib');
         
         const opcoes = {
-          paginaEmBranco: document.getElementById('opt-branco').checked,
-          limparMetadados: document.getElementById('opt-metadados').checked
+          paginaEmBranco: container.querySelector('#jt-opt-branco').checked,
+          limparMetadados: container.querySelector('#jt-opt-metadados').checked
         };
 
         const arquivos = itens.map(i => i.file);
@@ -156,7 +159,7 @@ PDFTools.registrar({
           avisoBox.style.display = 'block';
         }
 
-        const nome = document.getElementById('opt-nome').value.trim() || 'documento';
+        const nome = container.querySelector('#jt-opt-nome').value.trim() || 'documento';
         const nomeFinal = nome.endsWith('.pdf') ? nome : nome + '.pdf';
         
         areaResultado.style.display = 'block';
@@ -225,7 +228,7 @@ PDFTools.registrar({
         const el = PDFTools.UI.criarElemento('div', ['ft-lista-item']);
         el.draggable = true;
 
-        const txtPaginas = item.carregando ? 'Calculando...' : (item.numPages === '?' ? 'Erro' : `${item.numPages} pág(s)`);
+        const txtPaginas = (item.carregando ? 'Calculando...' : (item.numPages === '?' ? 'Erro' : `${item.numPages} pág(s)`)) + (item.protegido ? ' · protegido (senha)' : '');
 
         el.innerHTML = `
           <div style="font-size:24px;line-height:1" aria-hidden="true">📄</div>

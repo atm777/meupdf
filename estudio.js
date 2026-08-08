@@ -1,123 +1,58 @@
-// "Editar" — ferramenta de pequenas edições: a pessoa escolhe uma página e desenha à mão livre
-// ou inclui caixas de texto diretamente sobre o conteúdo do PDF. Não é um editor completo — para
-// girar/remover/reordenar páginas use Organizar; tarjar, comprimir, dividir etc. têm botão
-// próprio na barra de ferramentas do topo.
-function montarEstudioUI(container, arquivoInicial) {
+// "Editar" — edições pontuais na página que você está vendo (desenho, texto, marca, giro desta
+// página). Operações em lote no documento (reordenar, girar/apagar várias) ficam no Organizar.
+//
+// INVARIANTE: a POSIÇÃO na lista (paginas[i]) não é a identidade da página.
+// Conteúdo (tracos/itensTexto/giros) é sempre indexado por `paginas[i].id` estável. Nunca use o
+// índice sozinho como chave de mapa — excluir/inserir página (fases seguintes) quebraria isso.
+function montarEstudioUI(container, arquivoInicial, opts) {
     let fileOrig = null;
     let pdfDocJs = null;
-    let numPages = 0;
 
-    // Duas categorias de conteúdo por página, guardadas separadas porque se comportam diferente:
-    // - tracos: traços de lápis à mão livre, vetoriais (pontos normalizados 0-1 + espessura em pt
-    //   + cor). Desenhados direto sobre a página, não são "itens" arrastáveis depois de prontos.
-    // - itensTexto: caixas de texto, com posição/tamanho fracionários (0-1) — essas sim continuam
-    //   arrastáveis/redimensionáveis/apagáveis, e dá pra reabrir pra editar com duplo clique.
+    // Lista ordenada do documento COMO ESTÁ sendo editado.
+    // { id, origem: 'pdf'|'branca', idxOriginal?, larguraPt?, alturaPt? }
+    // ids 'p0','p1',... nunca reciclados (proximoIdPagina só sobe; desfazer NÃO regride o contador).
+    let paginas = [];
+    let proximoIdPagina = 0;
+    let modoInicial = opts && opts.modo ? opts.modo : null;
+
+    // Tamanhos padrão (pt) para página em branco — poucos, deliberadamente.
+    const TAM_A4_R = { width: 595.28, height: 841.89 };
+    const TAM_A4_P = { width: 841.89, height: 595.28 };
+    const TAM_A5_R = { width: 419.53, height: 595.28 };
+    const TAM_A5_P = { width: 595.28, height: 419.53 };
+
+    // Conteúdo por id estável (não por índice de posição):
+    // - tracos: lápis vetorial (pontos 0-1 + espessura pt + cor)
+    // - itensTexto: caixas de texto e marcas (frações 0-1)
+    // - giros: delta em graus (múltiplo de 90) por cima do /Rotate original
     let tracos = {};
     let itensTexto = {};
-    // Giro por página (delta em graus, múltiplo de 90) aplicado POR CIMA da rotação original do
-    // arquivo (/Rotate). Estado por página, igual traços/itens: navegar e voltar preserva. Entra
-    // nos snapshots do histórico (Ctrl+Z desfaz o giro junto). Ver girarPagina() e a exportação.
     let giros = {};
     let historico = [];
+    // Índice de POSIÇÃO em `paginas` (não o id). Resolver id com idAtual().
     let paginaAtualModal = 0;
 
-    if (!document.getElementById('css-estudio')) {
-      const style = document.createElement('style');
-      style.id = 'css-estudio';
-      style.textContent = `
-        .est-aviso { background: var(--sup-2); border: 1px solid var(--borda); border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; font-size: 14px; color: var(--texto-2); line-height: 1.5; }
-        .est-aviso strong { color: var(--texto); }
-
-        .est-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 16px; }
-        .est-pagina { background: var(--sup); box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 4px; display: flex; flex-direction: column; position: relative; cursor: pointer; transition: transform 0.2s; }
-        .est-pagina:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
-        .est-pagina-header { font-size: 12px; padding: 4px; text-align: center; font-weight: bold; background: var(--sup-2); border-bottom: 1px solid var(--borda); color: var(--texto-2); }
-        .est-thumb-container { width: 100%; height: 160px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: var(--sup); }
-        .est-thumb-container canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .est-badge { position: absolute; bottom: 4px; right: 4px; background: var(--cor-sucesso); color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold; display: none; }
-
-        .est-btn-acao { padding: 12px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; }
-        .est-btn-acao:hover { background: var(--cor-primaria-hover, var(--acento-hover)); }
-        .est-btn-acao:disabled { background: var(--sup-2); color: var(--texto-2); opacity: 0.45; cursor: not-allowed; }
-        .est-btn { padding: 6px 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--texto); }
-        .est-btn:hover { background: var(--sup-2); }
-
-        .est-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; }
-        .est-modal-topbar { background: var(--cor-primaria); color: white; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-        .est-modal-body { flex: 1; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 24px; overflow: auto; position: relative; }
-
-        /* Telas baixas/estreitas: recupera altura útil comendo o padding e compactando a topbar
-           (que a 380px quebrava em 2-3 linhas), para a página ficar o maior possível. */
-        @media (max-height: 720px), (max-width: 500px) {
-          .est-modal-body { padding: 8px; gap: 8px; }
-          .est-modal-topbar { padding: 6px 12px; gap: 8px; }
-          .est-modal-topbar .est-btn { padding: 5px 8px; font-size: 12px; }
-          .est-ferramentas-flutuante { top: 64px; left: 8px; }
-        }
-
-        .est-editor-wrapper { position: relative; isolation: isolate; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: inline-block; background: var(--sup); }
-        .est-editor-canvas { display: block; }
-        .est-editor-layer-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .est-editor-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-
-        .est-item-arrastavel { position: absolute; border: 1px dashed transparent; cursor: move; pointer-events: auto; }
-        .est-item-arrastavel:hover, .est-item-arrastavel.ativo { border-color: var(--cor-primaria); background: rgba(0, 123, 255, 0.05); }
-        .est-item-arrastavel .txt { width: 100%; height: 100%; overflow: hidden; white-space: pre; pointer-events: none; }
-        .est-item-arrastavel .marca-fill { width: 100%; height: 100%; mix-blend-mode: multiply; pointer-events: none; }
-        .est-marca-temp { position: absolute; mix-blend-mode: multiply; pointer-events: none; }
-
-        .est-resize-handle { position: absolute; bottom: -5px; right: -5px; width: 14px; height: 14px; background: var(--cor-primaria); border-radius: 50%; cursor: se-resize; display: none; }
-        .est-item-arrastavel.ativo .est-resize-handle { display: block; }
-        .est-delete-handle { position: absolute; top: -10px; right: -10px; width: 20px; height: 20px; background: var(--cor-erro); color: white; border-radius: 50%; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; cursor: pointer; display: none; }
-        .est-item-arrastavel.ativo .est-delete-handle { display: block; }
-
-        .est-texto-editando-area { width: 100%; height: 100%; border: 1px solid var(--cor-primaria); background: rgba(255,255,255,0.92); resize: none; padding: 2px; margin: 0; outline: none; box-sizing: border-box; }
-
-        .est-ferramentas-flutuante { position: absolute; top: 80px; left: 24px; background: var(--sup); padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 4px; z-index: 10; width: 220px; max-height: calc(100% - 100px); overflow-y: auto; }
-
-        .est-modo-grupo { display: flex; gap: 4px; margin-bottom: 8px; }
-        .est-modo-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: 11px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; color: var(--texto); }
-        .est-modo-btn.ativo { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
-        .est-modo-btn svg.pdf-icone { width: 18px; height: 18px; }
-        #btn-est-girar svg.pdf-icone { width: 16px; height: 16px; }
-
-        .est-sub-painel { background: var(--sup-2); border-radius: 6px; padding: 10px; margin-bottom: 8px; }
-        .est-campo-label { display: block; font-size: 11px; font-weight: bold; color: var(--texto-2); margin-bottom: 3px; }
-        .est-select { width: 100%; padding: 6px; border: 1px solid var(--borda); border-radius: 4px; font-size: 13px; background: var(--sup); color: var(--texto); }
-        .est-input-num { width: 56px; padding: 6px; border: 1px solid var(--borda); border-radius: 4px; font-size: 13px; background: var(--sup); color: var(--texto); }
-        .est-toggle-btn { width: 28px; height: 28px; border: 1px solid var(--borda); border-radius: 4px; background: var(--sup); cursor: pointer; color: var(--texto); }
-        .est-toggle-btn.ativo { background: var(--cor-primaria); color: #fff; border-color: var(--cor-primaria); }
-
-        .est-desenho-grupo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-        .est-desenho-grupo-label { font-size: 11px; font-weight: bold; color: var(--texto-2); margin-right: 2px; }
-        .est-lapis-tamanho { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--borda); background: var(--sup); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
-        .est-lapis-tamanho.ativo { border-color: var(--cor-primaria); }
-        .est-lapis-tamanho span { border-radius: 50%; background: #000; display: block; }
-        .est-cor-swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; box-shadow: 0 0 0 1px var(--borda); }
-        .est-cor-swatch.ativo { border-color: var(--cor-primaria); }
-        .est-cor-custom { width: 24px; height: 24px; border-radius: 50%; border: none; padding: 0; cursor: pointer; background: none; }
-
-        /* Respeita "reduzir movimento": neutraliza o "pulo" do hover do cartão de página. Fica
-           aqui (não só no style.css) porque este <style> é injetado em runtime e venceria a regra
-           global por ordem de cascata. */
-        @media (prefers-reduced-motion: reduce) {
-          .est-pagina { transition: none; }
-          .est-pagina:hover { transform: none; }
-        }
-      `;
-      document.head.appendChild(style);
+    function idAtual() {
+      const p = paginas[paginaAtualModal];
+      return p ? p.id : null;
     }
+    function numPaginas() {
+      return paginas.length;
+    }
+    function idEm(pos) {
+      return paginas[pos] ? paginas[pos].id : null;
+    }
+
+    
 
     container.innerHTML = `
       <div id="est-tela-inicial"></div>
       <div id="est-tela-trabalho" style="display:none;">
         <div class="est-aviso">
-          <strong>O que dá pra fazer aqui:</strong> pequenas edições numa página — desenhar à mão
-          livre com o lápis (tamanhos e cores), incluir uma caixa de texto ou grifar com marca
-          texto (clicar e arrastar sobre o conteúdo, sem esconder o que está embaixo), tudo direto
-          sobre o conteúdo do PDF. Para reorganizar, girar ou remover páginas, apagar informações
-          sensíveis, comprimir ou outras alterações maiores, use a ferramenta específica na barra
-          do topo.
+          <strong>O que dá pra fazer aqui:</strong> edições pontuais na página que você está
+          vendo — desenhar, texto, grifo, girar <em>esta</em> página ou excluí-la. Para reordenar
+          ou apagar/girar <em>várias</em> de uma vez, use <strong>Organizar</strong>. Tarjar,
+          comprimir e outras ações maiores têm botão próprio na barra do topo.
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
           <div style="font-size:16px; font-weight:bold; color:var(--texto);">Clique numa página para editar:</div>
@@ -125,6 +60,23 @@ function montarEstudioUI(container, arquivoInicial) {
         </div>
         <div class="est-grade" id="est-grade"></div>
         <div id="est-progresso-container" style="margin-top:16px;"></div>
+
+      <!-- Modal: tamanho da página em branco -->
+      <div id="est-modal-tamanho" class="est-modal-tamanho" style="display:none;">
+        <div class="est-modal-tamanho-caixa" role="dialog" aria-label="Tamanho da página em branco">
+          <h3>Página em branco</h3>
+          <p style="font-size:13px; color:var(--texto-2); margin:0 0 12px;">Escolha o tamanho da folha nova:</p>
+          <label><input type="radio" name="est-tam-branca" value="igual" checked> <span><strong>Igual à página de referência</strong> (recomendado)</span></label>
+          <label><input type="radio" name="est-tam-branca" value="a4r"> <span>A4 retrato</span></label>
+          <label><input type="radio" name="est-tam-branca" value="a4p"> <span>A4 paisagem</span></label>
+          <label><input type="radio" name="est-tam-branca" value="a5r"> <span>A5 retrato</span></label>
+          <label><input type="radio" name="est-tam-branca" value="a5p"> <span>A5 paisagem</span></label>
+          <div class="est-modal-tamanho-acoes">
+            <button type="button" class="est-btn" id="est-tam-cancelar">Cancelar</button>
+            <button type="button" class="est-btn-acao" id="est-tam-ok" style="width:auto; padding:8px 16px;">Inserir</button>
+          </div>
+        </div>
+      </div>
         <div id="est-resultado" style="display:none; margin-top:16px;">
           <div style="font-size:13px; color:var(--cor-sucesso); font-weight:bold; margin-bottom:8px;">✅ Concluído! Baixado automaticamente.</div>
           <button id="btn-est-baixar-novamente" class="pdf-btn-principal" style="margin-top:0;">Baixar Novamente</button>
@@ -137,26 +89,34 @@ function montarEstudioUI(container, arquivoInicial) {
         <div class="est-modal-topbar">
           <div style="font-size:16px; font-weight:bold;">Editando Página <span id="est-modal-pagina"></span></div>
           <div id="est-zoom-slot"></div>
-          <div style="display:flex; gap:8px;">
+          <div style="display:flex; gap:8px; flex-wrap: wrap;">
             <button class="est-btn" id="btn-est-desfazer">Desfazer (Ctrl+Z)</button>
-            <button class="est-btn" id="btn-est-fullscreen">⛶ Tela Cheia</button>
+            <button class="est-btn" id="btn-aplicar-todas" style="background:var(--cor-primaria); color:white; border-color:var(--cor-primaria); display:inline-flex; align-items:center; gap:6px;">${window.PDFTools.iconeSVG('ui-aplicar-todas')}<span>Aplicar a Todas</span></button>
+            <button class="est-btn" id="btn-est-fullscreen" style="display:inline-flex; align-items:center; gap:6px;">${window.PDFTools.iconeSVG('ui-tela-cheia')}<span>Tela Cheia</span></button>
             <button class="est-btn" style="background:var(--cor-primaria); color:white; border-color:var(--cor-primaria);" id="btn-est-fechar">Concluir Página</button>
           </div>
         </div>
 
-        <div class="est-ferramentas-flutuante">
-          <div class="est-modo-grupo">
-            <button type="button" class="est-modo-btn ativo" data-modo="mover" title="Mover e editar itens">${window.PDFTools.iconeSVG('ui-mover')} Mover</button>
-            <button type="button" class="est-modo-btn" data-modo="lapis" title="Desenhar à mão livre">${window.PDFTools.iconeSVG('ui-lapis')} Lápis</button>
-            <button type="button" class="est-modo-btn" data-modo="texto" title="Incluir caixa de texto">${window.PDFTools.iconeSVG('ui-texto')} Texto</button>
-            <button type="button" class="est-modo-btn" data-modo="marca" title="Marcar texto (grifar)">${window.PDFTools.iconeSVG('ui-marca')} Marca</button>
-          </div>
+        <div class="est-editor-layout">
+          <aside class="pdf-paleta" aria-label="Paleta de ferramentas do editor">
+            <div class="pdf-paleta-grupo" role="radiogroup" aria-label="Ferramentas">
+              <div class="pdf-paleta-grupo-rotulo">ferramentas</div>
+              <button type="button" class="pdf-paleta-btn est-modo-btn${modoInicial === 'mover' || !modoInicial ? ' ativo' : ''}" data-modo="mover" role="radio" aria-checked="${modoInicial === 'mover' || !modoInicial}" title="Mover (V)">${window.PDFTools.iconeSVG('ui-mover')}<span>Mover</span></button>
+              <button type="button" class="pdf-paleta-btn est-modo-btn${modoInicial === 'lapis' ? ' ativo' : ''}" data-modo="lapis" role="radio" aria-checked="${modoInicial === 'lapis'}" title="Lápis (L)">${window.PDFTools.iconeSVG('ui-lapis')}<span>Lápis</span></button>
+              <button type="button" class="pdf-paleta-btn est-modo-btn${modoInicial === 'texto' ? ' ativo' : ''}" data-modo="texto" role="radio" aria-checked="${modoInicial === 'texto'}" title="Texto (T)">${window.PDFTools.iconeSVG('ui-texto')}<span>Texto</span></button>
+              <button type="button" class="pdf-paleta-btn est-modo-btn${modoInicial === 'marca' ? ' ativo' : ''}" data-modo="marca" role="radio" aria-checked="${modoInicial === 'marca'}" title="Marca (M)">${window.PDFTools.iconeSVG('ui-marca')}<span>Marca</span></button>
+            </div>
 
-          <button type="button" class="est-btn" id="btn-est-girar" title="Girar a página 90° no sentido horário" style="display:flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-bottom:8px;">
-            ${window.PDFTools.iconeSVG('ui-girar')} Girar 90°
-          </button>
+            <div class="pdf-paleta-grupo" role="group" aria-label="Esta página">
+              <div class="pdf-paleta-grupo-rotulo">esta página</div>
+              <div class="pdf-paleta-acao-grupo">
+                <button type="button" class="pdf-paleta-btn est-btn" id="btn-est-girar" title="Girar a página 90° no sentido horário">${window.PDFTools.iconeSVG('ui-girar')}<span>Girar</span></button>
+                <button type="button" class="pdf-paleta-btn est-btn" id="btn-est-inserir-branca" title="Inserir página em branco depois desta">${window.PDFTools.iconeSVG('ui-inserir')}<span>Em branco</span></button>
+                <button type="button" class="pdf-paleta-btn est-btn perigo est-btn-excluir-pagina" id="btn-est-excluir-pagina" title="Excluir esta página">${window.PDFTools.iconeSVG('ui-excluir')}<span>Excluir</span></button>
+              </div>
+            </div>
 
-          <div class="est-sub-painel" id="est-painel-lapis" style="display:none;">
+            <div class="est-sub-painel" id="est-painel-lapis" style="display:none;">
             <div class="est-desenho-grupo">
               <span class="est-desenho-grupo-label">Espessura:</span>
               <button type="button" class="est-lapis-tamanho" data-tamanho-pt="1.5"><span style="width:4px; height:4px;"></span></button>
@@ -212,16 +172,16 @@ function montarEstudioUI(container, arquivoInicial) {
             <div style="font-size:11px; color:var(--texto-2); margin-top:8px;">Clique e arraste sobre o texto — fica um grifo translúcido, sem esconder o que está embaixo.</div>
           </div>
 
-          <hr style="border:0; border-top: 1px solid var(--borda); margin:8px 0;">
-          <button class="est-btn" id="btn-aplicar-todas" style="text-align:left; color:var(--cor-primaria);">✨ Aplicar a Todas</button>
-        </div>
+          </aside>
 
         <div class="est-modal-body" id="est-modal-body">
-          <div id="est-nav-paginas-slot"></div>
-          <div class="est-editor-wrapper" id="est-wrapper">
-            <canvas class="est-editor-canvas" id="est-canvas"></canvas>
-            <canvas class="est-editor-layer-canvas" id="est-traco-canvas"></canvas>
-            <div class="est-editor-layer" id="est-layer"></div>
+          <div class="est-editor-area">
+            <div id="est-nav-paginas-slot"></div>
+            <div class="est-editor-wrapper" id="est-wrapper">
+              <canvas class="est-editor-canvas" id="est-canvas"></canvas>
+              <canvas class="est-editor-layer-canvas" id="est-traco-canvas"></canvas>
+              <div class="est-editor-layer" id="est-layer"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -239,12 +199,21 @@ function montarEstudioUI(container, arquivoInicial) {
     }));
 
     const Ed = PDFTools.Editor;
-    const visaoObserver = Ed.criarObserverMiniaturas((el) => {
-      Ed.renderizarMiniaturaPdf(pdfDocJs, el, {
+    function opcoesMiniatura() {
+      return {
         containerSeletor: '.est-thumb-container',
-        getRotation: (index, page) =>
-          ((((page.rotate || 0) + (giros[index] || 0)) % 360) + 360) % 360
-      });
+        getPageNumber: (el, index) => {
+          const d = paginas[index];
+          return d && d.origem === 'pdf' ? (d.idxOriginal + 1) : 1;
+        },
+        getRotation: (index, page) => {
+          const id = idEm(index);
+          return ((((page.rotate || 0) + (giros[id] || 0)) % 360) + 360) % 360;
+        }
+      };
+    }
+    const visaoObserver = Ed.criarObserverMiniaturas((el) => {
+      Ed.renderizarMiniaturaPdf(pdfDocJs, el, opcoesMiniatura());
     });
 
     async function abrirArquivo(file) {
@@ -258,11 +227,19 @@ function montarEstudioUI(container, arquivoInicial) {
         await PDFTools.carregarLib('pdfjs');
         const buffer = await PDFTools.lerComoArrayBuffer(file);
         pdfDocJs = await window.pdfjsLib.getDocument({ data: buffer }).promise;
-        numPages = pdfDocJs.numPages;
 
+        paginas = [];
+        proximoIdPagina = 0;
         tracos = {}; itensTexto = {}; giros = {};
-        for (let i = 0; i < numPages; i++) { tracos[i] = []; itensTexto[i] = []; giros[i] = 0; }
-        historico = [JSON.stringify({ tracos, itensTexto, giros })];
+        for (let i = 0; i < pdfDocJs.numPages; i++) {
+          const id = 'p' + (proximoIdPagina++);
+          paginas.push({ id: id, origem: 'pdf', idxOriginal: i });
+          tracos[id] = [];
+          itensTexto[id] = [];
+          giros[id] = 0;
+        }
+        paginaAtualModal = 0;
+        historico = [JSON.stringify({ paginas: paginas, tracos: tracos, itensTexto: itensTexto, giros: giros })];
 
         telaInicial.style.display = 'none';
         telaTrabalho.style.display = 'block';
@@ -277,35 +254,248 @@ function montarEstudioUI(container, arquivoInicial) {
       const grade = container.querySelector('#est-grade');
       grade.innerHTML = '';
       visaoObserver.disconnect();
+      const soUma = numPaginas() <= 1;
 
-      for (let i = 0; i < numPages; i++) {
+      for (let i = 0; i < numPaginas(); i++) {
         const el = document.createElement('div');
         el.className = 'est-pagina';
-        el.dataset.index = i;
-        el.innerHTML = `<div class="est-pagina-header">Página ${i + 1}</div><div class="est-thumb-container"></div><div class="est-badge">Editada</div>`;
-        el.onclick = () => abrirEditor(i);
+        el.dataset.index = String(i);
+        el.dataset.pageId = paginas[i].id;
+        el.innerHTML =
+          '<div class="est-pagina-header">Página ' + (i + 1) + '</div>' +
+          '<div class="est-thumb-container"></div>' +
+          '<div class="est-badge">Editada</div>' +
+          '<button type="button" class="est-badge-excluir" title="' +
+            (soUma ? 'O documento precisa de pelo menos uma página' : 'Excluir página ' + (i + 1)) +
+            '"' + (soUma ? ' disabled' : '') + '>✕</button>';
+        el.onclick = (e) => {
+          if (e.target.closest && e.target.closest('.est-badge-excluir')) return;
+          abrirEditor(i);
+        };
+        const btnEx = el.querySelector('.est-badge-excluir');
+        if (btnEx && !soUma) {
+          btnEx.onclick = (e) => {
+            e.stopPropagation();
+            excluirPagina(i, { origem: 'grade' });
+          };
+        }
         grade.appendChild(el);
-        visaoObserver.observe(el);
+        if (paginas[i].origem === 'pdf') visaoObserver.observe(el);
+        else renderizarMiniatura(el);
       }
+
+      // Cartão "+" no fim: inserir página em branco no final do documento.
+      const addEl = document.createElement('button');
+      addEl.type = 'button';
+      addEl.className = 'est-pagina-add';
+      addEl.innerHTML = '<span class="est-pagina-add-plus" aria-hidden="true">+</span><span>Página em branco</span>';
+      addEl.title = 'Inserir página em branco no fim';
+      addEl.onclick = () => abrirModalTamanhoBranca({ insertAt: numPaginas(), refPos: numPaginas() - 1 });
+      grade.appendChild(addEl);
+
       atualizarBadges();
+      atualizarControlesExcluir();
+    }
+
+    /** Atualiza botão Excluir do modal (desabilitado se só resta 1 página). */
+    function atualizarControlesExcluir() {
+      const btn = container.querySelector('#btn-est-excluir-pagina');
+      if (!btn) return;
+      const soUma = numPaginas() <= 1;
+      btn.disabled = soUma;
+      btn.title = soUma
+        ? 'O documento precisa de pelo menos uma página'
+        : 'Excluir a página ' + (paginaAtualModal + 1) + ' (pode desfazer com Ctrl+Z)';
+    }
+
+    /**
+     * Remove a página na posição `pos` (lista editada). Descarta conteúdo por id.
+     * Confirmação obrigatória. Não apaga a última página.
+     * Se o editor estiver na página excluída, navega para a vizinha (mesma posição ou a anterior).
+     */
+    function excluirPagina(pos, opcoes) {
+      opcoes = opcoes || {};
+      if (pos < 0 || pos >= numPaginas()) return;
+      if (numPaginas() <= 1) {
+        PDFTools.UI.mostrarToast('O documento precisa de pelo menos uma página.', 'info');
+        return;
+      }
+      const numHumano = pos + 1;
+      if (!confirm('Excluir a página ' + numHumano + '?\n\nAs anotações desta página saem junto. Dá para desfazer com Ctrl+Z.')) {
+        return;
+      }
+
+      const modalEl = container.querySelector('#est-modal-editor');
+      const modalAberto = modalEl && modalEl.style.display !== 'none';
+      salvarEstado();
+
+      const removida = paginas[pos];
+      const id = removida.id;
+      paginas.splice(pos, 1);
+      delete tracos[id];
+      delete itensTexto[id];
+      delete giros[id];
+
+      // Ajustar índice do editor: se apagou a atual, fica na mesma posição (agora a próxima)
+      // ou na anterior se era a última; se apagou antes da atual, o índice desce 1.
+      let novoIdx = paginaAtualModal;
+      if (paginaAtualModal === pos) {
+        novoIdx = Math.min(pos, numPaginas() - 1);
+      } else if (paginaAtualModal > pos) {
+        novoIdx = paginaAtualModal - 1;
+      }
+      paginaAtualModal = Math.max(0, novoIdx);
+      idxEditando = null;
+
+      renderizarGrade();
+
+      if (modalAberto && typeof abrirEditor === 'function') {
+        // Reabre o vizinho (ou a única página restante) — não deixa modal numa página fantasma.
+        abrirEditor(paginaAtualModal);
+      }
+
+      PDFTools.UI.mostrarToast('Página ' + numHumano + ' excluída.', 'sucesso');
     }
 
     function atualizarBadges() {
-      for (let i = 0; i < numPages; i++) {
+      for (let i = 0; i < numPaginas(); i++) {
         const el = container.querySelector(`.est-pagina[data-index="${i}"]`);
         if (el) {
-          const temConteudo = (tracos[i] && tracos[i].length > 0) || (itensTexto[i] && itensTexto[i].length > 0);
+          const id = idEm(i);
+          const temConteudo = (tracos[id] && tracos[id].length > 0) || (itensTexto[id] && itensTexto[id].length > 0) || (giros[id] && giros[id] !== 0);
           el.querySelector('.est-badge').style.display = temConteudo ? 'block' : 'none';
         }
       }
     }
 
+    function desenharCanvasBranco(canvas, larguraPt, alturaPt, escala) {
+      canvas.width = Math.max(1, Math.round(larguraPt * escala));
+      canvas.height = Math.max(1, Math.round(alturaPt * escala));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+      ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+    }
+
+    /** Dimensões VISUAIS (pt) de um descritor, incluindo giro aplicado no editor. */
+    function dimsVisuaisDesc(desc) {
+      if (!desc) return { width: TAM_A4_R.width, height: TAM_A4_R.height };
+      if (desc.origem === 'branca') {
+        const g = ((giros[desc.id] || 0) % 360 + 360) % 360;
+        return PDFTools.dimensoesVisuais(desc.larguraPt, desc.alturaPt, g);
+      }
+      // pdf: só o delta do editor em cima do que o pdf.js reporta — precisa da page async.
+      return null;
+    }
+
     function renderizarMiniatura(el) {
-      return Ed.renderizarMiniaturaPdf(pdfDocJs, el, {
-        containerSeletor: '.est-thumb-container',
-        getRotation: (index, page) =>
-          ((((page.rotate || 0) + (giros[index] || 0)) % 360) + 360) % 360
-      });
+      const index = parseInt(el.dataset.index, 10);
+      const desc = paginas[index];
+      if (!desc) return Promise.resolve();
+      if (desc.origem === 'branca') {
+        if (el.dataset.rendered === 'true') return Promise.resolve();
+        el.dataset.rendered = 'true';
+        const box = el.querySelector('.est-thumb-container');
+        if (!box) return Promise.resolve();
+        const dims = dimsVisuaisDesc(desc);
+        const canvas = document.createElement('canvas');
+        // 120x150: o .est-thumb-container tem 160px de altura; a folga evita corte na borda.
+        const escala = Math.min(120 / dims.width, 150 / dims.height);
+        desenharCanvasBranco(canvas, dims.width, dims.height, escala);
+        box.innerHTML = '';
+        box.appendChild(canvas);
+        return Promise.resolve();
+      }
+      return Ed.renderizarMiniaturaPdf(pdfDocJs, el, opcoesMiniatura());
+    }
+
+    // --- Inserir página em branco ---
+    let _insertBrancaAt = 0;
+    let _insertBrancaRefPos = 0;
+    const modalTam = container.querySelector('#est-modal-tamanho');
+    const a11yTam = PDFTools.UI.tornarModalAcessivel(modalTam, {
+      rotulo: 'Tamanho da página em branco',
+      botaoFechar: () => container.querySelector('#est-tam-cancelar')
+    });
+
+    async function dimsVisuaisPosAsync(pos) {
+      if (pos < 0 || pos >= numPaginas()) return { width: TAM_A4_R.width, height: TAM_A4_R.height };
+      const desc = paginas[pos];
+      if (desc.origem === 'branca') return dimsVisuaisDesc(desc);
+      try {
+        const page = await pdfDocJs.getPage(desc.idxOriginal + 1);
+        const ang = ((((page.rotate || 0) + (giros[desc.id] || 0)) % 360) + 360) % 360;
+        const vp = page.getViewport({ scale: 1.0, rotation: ang });
+        return { width: vp.width, height: vp.height };
+      } catch (e) {
+        return { width: TAM_A4_R.width, height: TAM_A4_R.height };
+      }
+    }
+
+    function abrirModalTamanhoBranca(opcoes) {
+      opcoes = opcoes || {};
+      _insertBrancaAt = opcoes.insertAt != null ? opcoes.insertAt : numPaginas();
+      _insertBrancaRefPos = opcoes.refPos != null ? opcoes.refPos : Math.max(0, numPaginas() - 1);
+      const radioIgual = container.querySelector('input[name="est-tam-branca"][value="igual"]');
+      if (radioIgual) radioIgual.checked = true;
+      // Este modal também é position:fixed cobrindo a viewport (igual ao editor de página) e pode
+      // abrir direto da grade, SEM o editor por trás — precisa da mesma classe que tira o
+      // backdrop-filter do #workspace, senão fica preso dentro do #workspace em vez
+      // de cobrir a tela toda.
+      document.body.classList.add('pdf-editor-modal-aberto');
+      modalTam.style.display = 'flex';
+    }
+
+    function fecharModalTamanhoBranca() {
+      modalTam.style.display = 'none';
+      // Só desliga o backdrop-filter de volta se o editor de página não estiver aberto por trás
+      // (senão prendemos o fixed DELE, que também depende dessa classe). getComputedStyle (não
+      // .style.display) porque modalEditor pode nunca ter sido aberto nesta sessão — aí o inline
+      // style está vazio (''), não 'none', e o CSS base (.est-modal-overlay{display:none}) é quem
+      // decide de fato.
+      if (window.getComputedStyle(modalEditor).display === 'none') {
+        document.body.classList.remove('pdf-editor-modal-aberto');
+      }
+    }
+
+    container.querySelector('#est-tam-cancelar').onclick = fecharModalTamanhoBranca;
+    container.querySelector('#est-tam-ok').onclick = async () => {
+      const val = (container.querySelector('input[name="est-tam-branca"]:checked') || {}).value || 'igual';
+      let dims;
+      if (val === 'a4r') dims = TAM_A4_R;
+      else if (val === 'a4p') dims = TAM_A4_P;
+      else if (val === 'a5r') dims = TAM_A5_R;
+      else if (val === 'a5p') dims = TAM_A5_P;
+      else dims = await dimsVisuaisPosAsync(_insertBrancaRefPos);
+      // Página nova em rotação 0 com tamanho JÁ visual (paisagem se a ref era /Rotate 90).
+      fecharModalTamanhoBranca();
+      inserirPaginaBranca(_insertBrancaAt, dims);
+    };
+
+    function inserirPaginaBranca(insertAt, dims) {
+      if (!dims || !dims.width || !dims.height) dims = TAM_A4_R;
+      const modalEl = container.querySelector('#est-modal-editor');
+      const modalAberto = modalEl && modalEl.style.display !== 'none';
+      salvarEstado();
+      const id = 'p' + (proximoIdPagina++);
+      const desc = {
+        id: id,
+        origem: 'branca',
+        larguraPt: dims.width,
+        alturaPt: dims.height
+      };
+      const at = Math.max(0, Math.min(insertAt, numPaginas()));
+      paginas.splice(at, 0, desc);
+      tracos[id] = [];
+      itensTexto[id] = [];
+      giros[id] = 0;
+      idxEditando = null;
+      renderizarGrade();
+      if (modalAberto) {
+        abrirEditor(at);
+      }
+      PDFTools.UI.mostrarToast('Página em branco inserida.', 'sucesso');
     }
 
     // --- EDITOR DE PÁGINA ---
@@ -315,7 +505,7 @@ function montarEstudioUI(container, arquivoInicial) {
     const cvsEditor = container.querySelector('#est-canvas');
     const tracoCanvas = container.querySelector('#est-traco-canvas');
 
-    // Acessibilidade do modal do editor (foco preso, Esc fecha, foco devolvido). Ver Item 2.
+    // Acessibilidade do modal do editor (foco preso, Esc fecha, foco devolvido).
     const a11yEditor = window.PDFTools.UI.tornarModalAcessivel(modalEditor, {
       rotulo: 'Editor de página',
       botaoFechar: () => container.querySelector('#btn-est-fechar')
@@ -336,10 +526,10 @@ function montarEstudioUI(container, arquivoInicial) {
     // o pdf.js usa pra renderizar (getViewport({rotation})) e o que a exportação usa pra converter
     // as frações visuais em coordenada bruta do PDF. Sempre 0/90/180/270.
     function anguloVisualAtual() {
-      return (((rotacaoBasePagina + (giros[paginaAtualModal] || 0)) % 360) + 360) % 360;
+      const id = idAtual();
+      return (((rotacaoBasePagina + (giros[id] || 0)) % 360) + 360) % 360;
     }
 
-    // Lápis
     let lapisTamanhoPt = 3;
     let lapisCor = '#000000';
     let tracoEmAndamento = null;
@@ -356,13 +546,15 @@ function montarEstudioUI(container, arquivoInicial) {
     let marcaCorAtual = '#ffeb3b';
     let marcaEmAndamento = null; // { elemento, startXFrac, startYFrac }
 
-    // Zoom + nav via PDFTools.Editor (Fase 2).
+    // Zoom + nav via PDFTools.Editor (page-editor.js), compartilhado com Assinar e Tarjar.
     const modalBody = container.querySelector('#est-modal-body');
     const { controleZoom, navegadorPaginas } = Ed.montarZoomENav({
       modalBody,
       zoomSlot: container.querySelector('#est-zoom-slot'),
       navSlot: container.querySelector('#est-nav-paginas-slot'),
-      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); },
+      aoMudarZoom: (fator) => {
+        if (paginas[paginaAtualModal]) renderizarPaginaNoCanvas(fator);
+      },
       aoNavegar: (novoIndice) => abrirEditor(novoIndice)
     });
 
@@ -370,7 +562,32 @@ function montarEstudioUI(container, arquivoInicial) {
       return escalaBase * controleZoom.obterZoom();
     }
 
+    function viewportRefPaginaAtual() {
+      const desc = paginas[paginaAtualModal];
+      if (!desc) return { width: TAM_A4_R.width, height: TAM_A4_R.height };
+      if (desc.origem === 'branca') {
+        return PDFTools.dimensoesVisuais(desc.larguraPt, desc.alturaPt, anguloVisualAtual());
+      }
+      if (!paginaPdfAtual) return { width: TAM_A4_R.width, height: TAM_A4_R.height };
+      return paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
+    }
+
     async function renderizarPaginaNoCanvas(fatorZoom) {
+      const desc = paginas[paginaAtualModal];
+      if (desc && desc.origem === 'branca') {
+        const dims = PDFTools.dimensoesVisuais(desc.larguraPt, desc.alturaPt, anguloVisualAtual());
+        const scale = escalaBase * fatorZoom;
+        // Canvas de traço acompanha o tamanho da página branca.
+        desenharCanvasBranco(cvsEditor, dims.width, dims.height, scale);
+        if (tracoCanvas) {
+          tracoCanvas.width = cvsEditor.width;
+          tracoCanvas.height = cvsEditor.height;
+        }
+        redesenharTracos();
+        renderizarItensEditor();
+        return;
+      }
+      if (!paginaPdfAtual) return;
       await Ed.renderCanvasPagina(paginaPdfAtual, cvsEditor, escalaBase * fatorZoom, {
         rotation: anguloVisualAtual()
       });
@@ -379,28 +596,55 @@ function montarEstudioUI(container, arquivoInicial) {
     }
 
     async function abrirEditor(index) {
+      if (index < 0 || index >= numPaginas()) return;
       paginaAtualModal = index;
       idxEditando = null;
       container.querySelector('#est-modal-pagina').textContent = index + 1;
       Ed.abrirModalEditor(modalEditor);
       layer.innerHTML = '';
-      navegadorPaginas.atualizar(index, numPages);
+      navegadorPaginas.atualizar(index, numPaginas());
 
-      const page = await pdfDocJs.getPage(index + 1);
-      paginaPdfAtual = page;
-      rotacaoBasePagina = (((page.rotate || 0) % 360) + 360) % 360;
-      const viewportRef = page.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
-      visPageWidthPt = viewportRef.width;
-      visPageHeightPt = viewportRef.height;
+      const desc = paginas[index];
+      if (desc.origem === 'branca') {
+        paginaPdfAtual = null;
+        rotacaoBasePagina = 0;
+        const viewportRef = viewportRefPaginaAtual();
+        visPageWidthPt = viewportRef.width;
+        visPageHeightPt = viewportRef.height;
+        escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
+          fatorMaximo: 1.5,
+          navEl: navegadorPaginas.elemento
+        });
+      } else {
+        const page = await pdfDocJs.getPage(desc.idxOriginal + 1);
+        paginaPdfAtual = page;
+        rotacaoBasePagina = (((page.rotate || 0) % 360) + 360) % 360;
+        const viewportRef = page.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
+        visPageWidthPt = viewportRef.width;
+        visPageHeightPt = viewportRef.height;
+        escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
+          fatorMaximo: 1.5,
+          navEl: navegadorPaginas.elemento
+        });
+      }
 
-      escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
-        fatorMaximo: 1.5,
-        navEl: navegadorPaginas.elemento
-      });
-
-      definirModo('mover');
+      definirModo(modoInicial || 'mover');
+      modoInicial = null;
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
+      atualizarControlesExcluir();
     }
+
+    container.querySelector('#btn-est-excluir-pagina').onclick = () => {
+      excluirPagina(paginaAtualModal, { origem: 'editor' });
+    };
+    container.querySelector('#btn-est-inserir-branca').onclick = () => {
+      // Insere DEPOIS da pagina aberta (o botao esta dentro do editor, entao a referencia de
+      // tamanho e a pagina que a pessoa esta vendo).
+      abrirModalTamanhoBranca({
+        insertAt: paginaAtualModal + 1,
+        refPos: paginaAtualModal
+      });
+    };
 
     // Cursores em forma de emoji (lápis/marca-texto) via SVG embutido — sem precisar de nenhum
     // arquivo de imagem à parte. O "hotspot" (2 28) fica perto da ponta do emoji.
@@ -411,10 +655,17 @@ function montarEstudioUI(container, arquivoInicial) {
     const CURSOR_LAPIS = cursorEmoji('✏️');
     const CURSOR_MARCA = cursorEmoji('🖍️');
 
+    // Critério de divisão: paleta = o que age sobre o conteúdo ou sobre esta página; a barra do topo
+    // age sobre a sessão de edição inteira.
     // --- MODO (Mover / Lápis / Texto / Marca) ---
     function definirModo(novoModo) {
       modoAtual = novoModo;
-      container.querySelectorAll('.est-modo-btn').forEach(b => b.classList.toggle('ativo', b.dataset.modo === novoModo));
+      container.querySelectorAll('.est-modo-btn').forEach(b => {
+        const ativa = b.dataset.modo === novoModo;
+        b.classList.toggle('ativo', ativa);
+        b.setAttribute('aria-checked', String(ativa));
+        b.tabIndex = ativa ? 0 : -1;
+      });
       container.querySelector('#est-painel-lapis').style.display = novoModo === 'lapis' ? 'block' : 'none';
       container.querySelector('#est-painel-texto').style.display = novoModo === 'texto' ? 'block' : 'none';
       container.querySelector('#est-painel-marca').style.display = novoModo === 'marca' ? 'block' : 'none';
@@ -424,6 +675,23 @@ function montarEstudioUI(container, arquivoInicial) {
         : novoModo === 'texto' ? 'text'
         : 'default';
     }
+
+    function buscarBotoesModo() {
+      return Array.from(container.querySelectorAll('.est-modo-btn'));
+    }
+
+    function focarModoRelativo(delta) {
+      const botoes = buscarBotoesModo();
+      if (botoes.length === 0) return;
+      const atual = botoes.findIndex(b => b === document.activeElement || b.getAttribute('aria-checked') === 'true');
+      const proximo = ((atual >= 0 ? atual : 0) + delta + botoes.length) % botoes.length;
+      const botao = botoes[proximo];
+      if (botao) {
+        botao.focus();
+        definirModo(botao.dataset.modo);
+      }
+    }
+
     container.querySelectorAll('.est-modo-btn').forEach(btn => {
       btn.onclick = () => definirModo(btn.dataset.modo);
     });
@@ -470,9 +738,9 @@ function montarEstudioUI(container, arquivoInicial) {
     // ângulo visual corrente — retrato↔paisagem no giro de 90° muda largura/altura, então a escala
     // precisa ser refeita. Respeita a tela cheia (fatorMáximo 3 vs 1.5).
     function recalcularEscalaBase() {
-      if (!paginaPdfAtual) return;
+      if (!paginas[paginaAtualModal]) return;
       const emTelaCheia = document.fullscreenElement === modalEditor;
-      const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
+      const viewportRef = viewportRefPaginaAtual();
       visPageWidthPt = viewportRef.width;
       visPageHeightPt = viewportRef.height;
       escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
@@ -482,25 +750,33 @@ function montarEstudioUI(container, arquivoInicial) {
     }
 
     function girarPagina(delta) {
-      if (!paginaPdfAtual) return;
-      const idx = paginaAtualModal;
+      const desc = paginas[paginaAtualModal];
+      const id = idAtual();
+      if (!desc || !id) return;
+      // Página PDF precisa do objeto pdf.js; branca gira só com giros[] + canvas branco.
+      if (desc.origem === 'pdf' && !paginaPdfAtual) return;
       const oldVisW = visPageWidthPt, oldVisH = visPageHeightPt;
       salvarEstado();
 
-      // Dimensões visuais NOVAS (90°/270° trocam largura↔altura) pra reancorar o texto em pt.
-      const anguloNovo = (((rotacaoBasePagina + (giros[idx] || 0) + delta) % 360) + 360) % 360;
-      const vpNovo = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloNovo });
-      const newVisW = vpNovo.width, newVisH = vpNovo.height;
+      const anguloNovo = (((rotacaoBasePagina + (giros[id] || 0) + delta) % 360) + 360) % 360;
+      let newVisW, newVisH;
+      if (desc.origem === 'branca') {
+        const d = PDFTools.dimensoesVisuais(desc.larguraPt, desc.alturaPt, anguloNovo);
+        newVisW = d.width; newVisH = d.height;
+      } else {
+        const vpNovo = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloNovo });
+        newVisW = vpNovo.width; newVisH = vpNovo.height;
+      }
 
-      (itensTexto[idx] || []).forEach(item => {
+      (itensTexto[id] || []).forEach(item => {
         if (item.tipo === 'marca') remapMarca(item, delta);
         else remapTexto(item, delta, oldVisW, oldVisH, newVisW, newVisH);
       });
-      (tracos[idx] || []).forEach(tr => {
+      (tracos[id] || []).forEach(tr => {
         tr.pontosNorm = (tr.pontosNorm || []).map(p => remapPontoFrac(p.x, p.y, delta));
       });
 
-      giros[idx] = (((giros[idx] || 0) + delta) % 360 + 360) % 360;
+      giros[id] = (((giros[id] || 0) + delta) % 360 + 360) % 360;
       idxEditando = null;
       recalcularEscalaBase();
       renderizarPaginaNoCanvas(controleZoom.obterZoom());
@@ -520,11 +796,15 @@ function montarEstudioUI(container, arquivoInicial) {
         lapisCor = btn.dataset.cor;
         container.querySelectorAll('#est-painel-lapis .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
         btn.classList.add('ativo');
+        aplicarCorLapisNaUI(lapisCor);
+        sincronizarSwatchesAria('#est-painel-lapis');
       };
     });
     container.querySelector('#est-lapis-cor-custom').oninput = (e) => {
       lapisCor = e.target.value;
       container.querySelectorAll('#est-painel-lapis .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
+      aplicarCorLapisNaUI(lapisCor);
+      sincronizarSwatchesAria('#est-painel-lapis');
     };
 
     // --- MARCA TEXTO: grifo translúcido, cores predefinidas ---
@@ -533,8 +813,26 @@ function montarEstudioUI(container, arquivoInicial) {
         marcaCorAtual = btn.dataset.cor;
         container.querySelectorAll('#est-painel-marca .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
         btn.classList.add('ativo');
+        sincronizarSwatchesAria('#est-painel-marca');
       };
     });
+
+    // Acessibilidade (aria-label/aria-pressed) + cor viva do ponto de espessura (paleta do Editar).
+    const NOMES_COR = { '#000000': 'Preto', '#ef4444': 'Vermelho', '#0a58ca': 'Azul', '#10b981': 'Verde',
+      '#f59e0b': 'Laranja', '#ffeb3b': 'Amarelo', '#76ff03': 'Verde fluorescente', '#ff4081': 'Rosa' };
+    function sincronizarSwatchesAria(painelSel) {
+      container.querySelectorAll(painelSel + ' .est-cor-swatch').forEach(b => {
+        if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', NOMES_COR[(b.dataset.cor || '').toLowerCase()] || b.dataset.cor || 'Cor');
+        b.setAttribute('aria-pressed', b.classList.contains('ativo') ? 'true' : 'false');
+      });
+    }
+    function aplicarCorLapisNaUI(cor) { const p = container.querySelector('#est-painel-lapis'); if (p) p.style.setProperty('--lapis-cor', cor); }
+    ['#est-painel-lapis', '#est-painel-texto', '#est-painel-marca'].forEach(sincronizarSwatchesAria);
+    (function () {
+      const nomes = ['Fino', 'Médio', 'Grosso'];
+      container.querySelectorAll('#est-painel-lapis .est-lapis-tamanho').forEach((b, i) => b.setAttribute('aria-label', 'Espessura: ' + (nomes[i] || b.dataset.tamanhoPt)));
+    })();
+    aplicarCorLapisNaUI(lapisCor);
 
     function posRelativaCanvas(e, canvas) {
       const rect = canvas.getBoundingClientRect();
@@ -576,7 +874,7 @@ function montarEstudioUI(container, arquivoInicial) {
         salvarEstado();
         const w = tracoCanvas.width, h = tracoCanvas.height;
         const pontosNorm = tracoEmAndamento.pontosPx.map(p => ({ x: p.x / w, y: p.y / h }));
-        tracos[paginaAtualModal].push({ pontosNorm, corHex: tracoEmAndamento.corHex, larguraPt: tracoEmAndamento.larguraPt });
+        tracos[idAtual()].push({ pontosNorm, corHex: tracoEmAndamento.corHex, larguraPt: tracoEmAndamento.larguraPt });
       }
       tracoEmAndamento = null;
     }
@@ -596,7 +894,7 @@ function montarEstudioUI(container, arquivoInicial) {
       ctx.clearRect(0, 0, tracoCanvas.width, tracoCanvas.height);
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       const escala = obterEscalaAtual();
-      const lista = tracos[paginaAtualModal] || [];
+      const lista = tracos[idAtual()] || [];
       lista.forEach(tr => {
         if (!tr.pontosNorm || tr.pontosNorm.length < 2) return;
         ctx.strokeStyle = tr.corHex;
@@ -676,11 +974,7 @@ function montarEstudioUI(container, arquivoInicial) {
     }
 
     function encontrarCaractereNaoSuportado(font, texto) {
-      for (const ch of texto) {
-        if (ch === '\n') continue;
-        try { font.widthOfTextAtSize(ch, 10); } catch (e) { return ch; }
-      }
-      return null;
+      return PDFTools.encontrarCaractereNaoSuportado(font, texto);
     }
 
     // `larguraPaginaPt`/`alturaPaginaPt` são opcionais e existem só pro caso de a pessoa navegar
@@ -730,11 +1024,12 @@ function montarEstudioUI(container, arquivoInicial) {
       container.querySelector('#est-fonte-negrito').classList.toggle('ativo', fonteNegrito);
       container.querySelector('#est-fonte-italico').classList.toggle('ativo', fonteItalico);
       container.querySelectorAll('#est-painel-texto .est-cor-swatch').forEach(b => b.classList.toggle('ativo', b.dataset.cor === fonteCor));
+      sincronizarSwatchesAria('#est-painel-texto');
     }
 
     function aoMudarControleFonte() {
       if (idxEditando === null) return;
-      const item = itensTexto[paginaAtualModal][idxEditando];
+      const item = itensTexto[idAtual()][idxEditando];
       if (!item) return;
       item.tamanhoPt = fonteTamanhoPt; item.corHex = fonteCor; item.familia = fonteFamilia;
       item.negrito = fonteNegrito; item.italico = fonteItalico;
@@ -763,12 +1058,14 @@ function montarEstudioUI(container, arquivoInicial) {
         fonteCor = btn.dataset.cor;
         container.querySelectorAll('#est-painel-texto .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
         btn.classList.add('ativo');
+        sincronizarSwatchesAria('#est-painel-texto');
         aoMudarControleFonte();
       };
     });
     container.querySelector('#est-texto-cor-custom').oninput = (e) => {
       fonteCor = e.target.value;
       container.querySelectorAll('#est-painel-texto .est-cor-swatch').forEach(b => b.classList.remove('ativo'));
+      sincronizarSwatchesAria('#est-painel-texto');
       aoMudarControleFonte();
     };
 
@@ -850,7 +1147,7 @@ function montarEstudioUI(container, arquivoInicial) {
       if (hFrac < alturaLinhaFrac * 0.6) hFrac = alturaLinhaFrac;
 
       salvarEstado();
-      itensTexto[paginaAtualModal].push({ tipo: 'marca', x: xFrac, y: yFrac, w: wFrac, h: hFrac, corHex: marcaCorAtual });
+      itensTexto[idAtual()].push({ tipo: 'marca', x: xFrac, y: yFrac, w: wFrac, h: hFrac, corHex: marcaCorAtual });
       renderizarItensEditor();
     }
 
@@ -869,8 +1166,8 @@ function montarEstudioUI(container, arquivoInicial) {
         tamanhoPt: fonteTamanhoPt, corHex: fonteCor, familia: fonteFamilia,
         negrito: fonteNegrito, italico: fonteItalico
       };
-      itensTexto[paginaAtualModal].push(item);
-      const idx = itensTexto[paginaAtualModal].length - 1;
+      itensTexto[idAtual()].push(item);
+      const idx = itensTexto[idAtual()].length - 1;
       renderizarItensEditor().then(() => abrirEdicaoTexto(idx));
     }
 
@@ -879,10 +1176,11 @@ function montarEstudioUI(container, arquivoInicial) {
       // Capturados agora: se a pessoa navegar pra outra página (setas ▲/▼) enquanto ainda está
       // editando este texto, o commit precisa continuar mirando a página/dimensões de ONDE o
       // texto está, não da página nova que passou a estar visível.
-      const paginaDoItem = paginaAtualModal;
+      const paginaDoItemIdx = paginaAtualModal;
+      const paginaDoItemId = idAtual();
       const larguraPaginaDoItem = visPageWidthPt;
       const alturaPaginaDoItem = visPageHeightPt;
-      const item = itensTexto[paginaDoItem][idx];
+      const item = itensTexto[paginaDoItemId] && itensTexto[paginaDoItemId][idx];
       if (!item) return;
 
       fonteFamilia = item.familia; fonteTamanhoPt = item.tamanhoPt; fonteCor = item.corHex;
@@ -920,7 +1218,7 @@ function montarEstudioUI(container, arquivoInicial) {
         if (idxEditando === idx) idxEditando = null;
         salvarEstado();
         if (!novoTexto.trim()) {
-          itensTexto[paginaDoItem].splice(idx, 1);
+          itensTexto[paginaDoItemId].splice(idx, 1);
         } else {
           item.val = novoTexto;
           item.tamanhoPt = fonteTamanhoPt; item.corHex = fonteCor; item.familia = fonteFamilia;
@@ -930,7 +1228,7 @@ function montarEstudioUI(container, arquivoInicial) {
         }
         // Só re-renderiza a camada se a página ainda for a mesma — se a pessoa já navegou pra
         // outra página, quem cuida da tela agora é o abrirEditor() que ela disparou.
-        if (paginaAtualModal === paginaDoItem) renderizarItensEditor();
+        if (paginaAtualModal === paginaDoItemIdx) renderizarItensEditor();
       };
 
       // Não dá pra confiar só no "blur" da textarea: depois que o foco sai dela pela primeira vez
@@ -956,16 +1254,17 @@ function montarEstudioUI(container, arquivoInicial) {
 
     // --- APLICAR A TODAS ---
     container.querySelector('#btn-aplicar-todas').onclick = () => {
-      const ts = tracos[paginaAtualModal] || [];
-      const its = itensTexto[paginaAtualModal] || [];
+      const ts = tracos[idAtual()] || [];
+      const its = itensTexto[idAtual()] || [];
       if (ts.length === 0 && its.length === 0) return alert('Inclua pelo menos um traço ou texto nesta página primeiro.');
       if (confirm('Replicar os traços e textos desta página para TODAS as páginas do documento? Isso sobrescreve a edição das outras. (O giro da página NÃO é replicado — cada página mantém a própria rotação.)')) {
         salvarEstado();
         const cloneTs = JSON.parse(JSON.stringify(ts));
         const cloneIts = JSON.parse(JSON.stringify(its));
-        for (let i = 0; i < numPages; i++) {
-          tracos[i] = JSON.parse(JSON.stringify(cloneTs));
-          itensTexto[i] = JSON.parse(JSON.stringify(cloneIts));
+        for (let i = 0; i < numPaginas(); i++) {
+          const id = idEm(i);
+          tracos[id] = JSON.parse(JSON.stringify(cloneTs));
+          itensTexto[id] = JSON.parse(JSON.stringify(cloneIts));
         }
         redesenharTracos();
         renderizarItensEditor();
@@ -976,7 +1275,7 @@ function montarEstudioUI(container, arquivoInicial) {
     // --- Renderização dos itens de texto (arrastáveis) ---
     async function renderizarItensEditor() {
       layer.innerHTML = '';
-      const lista = itensTexto[paginaAtualModal] || [];
+      const lista = itensTexto[idAtual()] || [];
       const w = cvsEditor.width, h = cvsEditor.height;
       const escala = obterEscalaAtual();
       const fontes = await obterFontesMetricas();
@@ -1018,7 +1317,7 @@ function montarEstudioUI(container, arquivoInicial) {
         del.onclick = (e) => {
           if (modoAtual === 'lapis') return;
           e.stopPropagation(); salvarEstado();
-          itensTexto[paginaAtualModal].splice(idx, 1);
+          itensTexto[idAtual()].splice(idx, 1);
           renderizarItensEditor();
         };
 
@@ -1120,7 +1419,14 @@ function montarEstudioUI(container, arquivoInicial) {
 
     // --- DESFAZER ---
     function salvarEstado() {
-      historico.push(JSON.stringify({ tracos, itensTexto, giros }));
+      // Snapshot inclui a lista de páginas (identidade + ordem). proximoIdPagina NÃO entra:
+      // ids nunca são reaproveitados, mesmo após desfazer.
+      historico.push(JSON.stringify({
+        paginas: paginas,
+        tracos: tracos,
+        itensTexto: itensTexto,
+        giros: giros
+      }));
       if (historico.length > 20) historico.shift();
     }
 
@@ -1129,19 +1435,47 @@ function montarEstudioUI(container, arquivoInicial) {
         // O topo da pilha é o snapshot salvo bem antes da última mudança — usa ele direto como
         // novo estado (e remove da pilha), em vez de descartá-lo e pular pro que vem antes dele.
         const estado = JSON.parse(historico.pop());
+        if (estado.paginas) paginas = estado.paginas;
         tracos = estado.tracos; itensTexto = estado.itensTexto;
         if (estado.giros) giros = estado.giros;
+        if (paginaAtualModal >= numPaginas()) paginaAtualModal = Math.max(0, numPaginas() - 1);
         idxEditando = null;
-        // Re-renderiza a página inteira (não só traços/itens): desfazer pode ter revertido um giro,
-        // e aí o canvas precisa voltar ao ângulo anterior, com a escala "ajustar à tela" refeita.
-        recalcularEscalaBase();
-        renderizarPaginaNoCanvas(controleZoom.obterZoom());
+        // Grade precisa acompanhar (desfazer de exclusão devolve página).
+        renderizarGrade();
+        const modalAberto = modalEditor.style.display !== 'none';
+        if (modalAberto) {
+          abrirEditor(paginaAtualModal);
+        }
       }
     };
 
     function aoTecladoEstudio(e) {
-      if (e.ctrlKey && e.key === 'z' && modalEditor.style.display !== 'none') {
+      if (modalEditor.style.display === 'none') return;
+      const foco = document.activeElement;
+      const focoTag = foco && foco.tagName;
+      const textoAtivo = foco && (focoTag === 'TEXTAREA' || focoTag === 'INPUT' || foco.isContentEditable);
+      if (e.ctrlKey && e.key === 'z') {
         container.querySelector('#btn-est-desfazer').click();
+        return;
+      }
+      if (textoAtivo) return;
+
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const mapaAtalhos = { v: 'mover', l: 'lapis', t: 'texto', m: 'marca' };
+        const modo = mapaAtalhos[e.key.toLowerCase()];
+        if (modo) {
+          e.preventDefault();
+          definirModo(modo);
+          return;
+        }
+      }
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const ativo = document.activeElement;
+        if (ativo && ativo.classList && ativo.classList.contains('est-modo-btn')) {
+          e.preventDefault();
+          focarModoRelativo(e.key === 'ArrowDown' ? 1 : -1);
+        }
       }
     }
     document.addEventListener('keydown', aoTecladoEstudio);
@@ -1178,8 +1512,8 @@ function montarEstudioUI(container, arquivoInicial) {
 
     function aoMudarFullscreenEstudio() {
       const emTelaCheia = document.fullscreenElement === modalEditor;
-      btnFullscreen.textContent = emTelaCheia ? '⤡ Sair da Tela Cheia' : '⛶ Tela Cheia';
-      if (!paginaPdfAtual) return;
+      btnFullscreen.innerHTML = window.PDFTools.iconeSVG('ui-tela-cheia') + '<span>' + (emTelaCheia ? 'Sair da Tela Cheia' : 'Tela Cheia') + '</span>';
+      if (!paginas[paginaAtualModal]) return;
       recalcularEscalaBase();
       renderizarPaginaNoCanvas(controleZoom.obterZoom());
     }
@@ -1189,16 +1523,13 @@ function montarEstudioUI(container, arquivoInicial) {
       modalEl: modalEditor,
       modalBody,
       navEl: navegadorPaginas.elemento,
-      getPaginaPdf: () => paginaPdfAtual,
-      getRotation: () => anguloVisualAtual(),
+      getViewportRef: () => viewportRefPaginaAtual(),
       getFatorMaximo: () => (document.fullscreenElement === modalEditor ? 3 : 1.5),
       setEscalaBase: (n) => {
         escalaBase = n;
-        if (paginaPdfAtual) {
-          const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
-          visPageWidthPt = viewportRef.width;
-          visPageHeightPt = viewportRef.height;
-        }
+        const viewportRef = viewportRefPaginaAtual();
+        visPageWidthPt = viewportRef.width;
+        visPageHeightPt = viewportRef.height;
       },
       render: () => renderizarPaginaNoCanvas(controleZoom.obterZoom())
     });
@@ -1208,8 +1539,11 @@ function montarEstudioUI(container, arquivoInicial) {
       const totalTracos = Object.values(tracos).flat().length;
       const totalTextos = Object.values(itensTexto).flat().length;
       const totalGiros = Object.values(giros).filter(g => g).length;
-      if (totalTracos + totalTextos + totalGiros === 0) {
-        return alert('Você ainda não incluiu nada no documento.\n\nComo fazer:\n1. Clique em uma das páginas.\n2. No editor que abrir, escolha "✏️ Lápis" (desenhe direto na página), "📝 Texto" (clique onde quer escrever) ou "🖍️ Marca" (clique e arraste sobre o texto pra grifar).\n3. Clique em "Concluir Página" e depois em "Gerar PDF Editado".');
+      const nPdf = paginas.filter(p => p.origem === 'pdf').length;
+      const nOrig = pdfDocJs ? pdfDocJs.numPages : 0;
+      const mudouEstrutura = paginas.some(p => p.origem === 'branca') || nPdf !== nOrig;
+      if (totalTracos + totalTextos + totalGiros === 0 && !mudouEstrutura) {
+        return alert('Você ainda não incluiu nada no documento.\n\nComo fazer:\n1. Clique numa página (ou em “+ Página em branco”).\n2. Desenhe, escreva, grife, gire ou exclua páginas.\n3. Clique em "Gerar PDF Editado".');
       }
 
       const btn = container.querySelector('#btn-gerar');
@@ -1217,7 +1551,7 @@ function montarEstudioUI(container, arquivoInicial) {
       try {
         await PDFTools.carregarLib('pdf-lib');
 
-        const blob = await aplicarEdicoesEstudio(fileOrig, tracos, itensTexto, giros, (pct, txt) => progresso.atualizar(pct, txt));
+        const blob = await aplicarEdicoesEstudio(fileOrig, paginas, tracos, itensTexto, giros, (pct, txt) => progresso.atualizar(pct, txt));
         PDFTools.UI.mostrarToast('PDF editado com sucesso!', 'sucesso');
         const nome = PDFTools.nomeSemExtensao(fileOrig.name) + '-editado.pdf';
         PDFTools.baixar(blob, nome);
@@ -1251,7 +1585,9 @@ function montarEstudioUI(container, arquivoInicial) {
       document.removeEventListener('keydown', aoTecladoEstudio);
       document.removeEventListener('fullscreenchange', aoMudarFullscreenEstudio);
       Ed.fecharModalEditor(modalEditor);
+      try { fecharModalTamanhoBranca(); } catch (e) {}
       try { a11yEditor.destruir(); } catch (e) {}
+      try { a11yTam.destruir(); } catch (e) {}
       try { visaoObserver.disconnect(); } catch (e) {}
     };
 }
@@ -1261,7 +1597,7 @@ PDFTools.registrar({
   nome: 'Pequenas Edições',
   descricao: 'Desenhe à mão livre ou inclua uma caixa de texto direto sobre a página — pequenas edições, sem precisar de outra ferramenta.',
   precisa: ['pdf-lib', 'pdfjs'],
-  montarUI: (container, arquivoInicial) => montarEstudioUI(container, arquivoInicial)
+  montarUI: (container, arquivoInicial, opts) => montarEstudioUI(container, arquivoInicial, opts)
 });
 
 // --- LÓGICA PURA (exportação) ---
@@ -1311,11 +1647,7 @@ function quebrarTextoEmLinhasGlobal(font, texto, tamanhoPt, larguraMaxPt) {
 }
 
 function encontrarCaractereNaoSuportadoGlobal(font, texto) {
-  for (const ch of texto) {
-    if (ch === '\n') continue;
-    try { font.widthOfTextAtSize(ch, 10); } catch (e) { return ch; }
-  }
-  return null;
+  return PDFTools.encontrarCaractereNaoSuportado(font, texto);
 }
 
 function desenharTracoNoPdf(page, traco, rawW, rawH, angulo) {
@@ -1405,40 +1737,68 @@ function desenharTextoMultilinhaNoPdf(page, item, font, rawW, rawH, angulo) {
   });
 }
 
-async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, girosMap, aoProgredir) {
+/**
+ * Exporta o PDF com as edições do Estúdio.
+ * paginasLista: [{ id, origem: 'pdf'|'branca', idxOriginal?, larguraPt?, alturaPt? }]
+ * Mapas de conteúdo por **id** estável.
+ *
+ * Sem reordenação de originais:
+ *  1) removePage das originais excluídas — de trás pra frente
+ *  2) insertPage das brancas nas posições finais — de frente pra trás
+ *  ⇒ doc.getPage(j) ≡ paginasLista[j]
+ */
+async function aplicarEdicoesEstudio(fileOrig, paginasLista, tracosMap, itensTextoMap, girosMap, aoProgredir) {
   const buffer = await PDFTools.lerComoArrayBuffer(fileOrig);
   const { PDFDocument, StandardFonts, degrees } = window.PDFLib;
   const novoDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-  const numPages = novoDoc.getPageCount();
+  const lista = paginasLista || [];
+  const total = Math.max(1, lista.length);
 
-  // Embute só as variantes de fonte realmente usadas no documento (marca texto não precisa
-  // de fonte nenhuma — é só um retângulo colorido).
+  aoProgredir(5, 'Ajustando páginas do documento...');
+  await new Promise(r => setTimeout(r, 0));
+
+  const sobreviventes = new Set(
+    lista.filter(p => p.origem === 'pdf').map(p => p.idxOriginal)
+  );
+  for (let i = novoDoc.getPageCount() - 1; i >= 0; i--) {
+    if (!sobreviventes.has(i)) novoDoc.removePage(i);
+  }
+
+  // Inserir brancas de frente pra trás (j já é a posição final).
+  lista.forEach((p, j) => {
+    if (p.origem === 'branca') {
+      novoDoc.insertPage(j, [p.larguraPt, p.alturaPt]);
+    }
+  });
+
   const nomesUsados = new Set();
-  Object.values(itensTextoMap).flat()
-    .filter(it => it.tipo !== 'marca')
+  Object.values(itensTextoMap || {}).flat()
+    .filter(it => it && it.tipo !== 'marca')
     .forEach(it => nomesUsados.add(nomeFonteVarianteGlobal(it.familia, it.negrito, it.italico)));
   const fontesEmbutidas = {};
   for (const nome of nomesUsados) fontesEmbutidas[nome] = await novoDoc.embedFont(StandardFonts[nome]);
 
-  for (let i = 0; i < numPages; i++) {
-    aoProgredir((i / numPages) * 100, `Processando página ${i + 1} de ${numPages}...`);
+  for (let j = 0; j < lista.length; j++) {
+    aoProgredir(10 + (j / total) * 85, 'Processando página ' + (j + 1) + ' de ' + total + '...');
     await new Promise(r => setTimeout(r, 0));
 
-    const page = novoDoc.getPage(i);
+    const desc = lista[j];
+    const id = desc.id;
+    const page = novoDoc.getPage(j);
     const rawSize = page.getSize();
     const anguloOriginal = page.getRotation().angle;
-    // Giro aplicado no editor entra por cima do /Rotate original. Como as frações dos itens já
-    // foram remapeadas pro espaço visual do ângulo TOTAL (ver girarPagina), tanto o /Rotate gravado
-    // quanto o ângulo usado pra desenhar têm que ser o total — desenhar com um e gravar outro é o
-    // erro clássico aqui. As dimensões brutas (rawSize) não mudam com o giro.
-    const delta = (girosMap && girosMap[i]) || 0;
-    const anguloTotal = (((anguloOriginal + delta) % 360) + 360) % 360;
-    if (delta) page.setRotation(degrees(anguloTotal));
+    const delta = (girosMap && girosMap[id]) || 0;
+    // Branca nasce com /Rotate 0; o giro do editor é o ângulo total.
+    const anguloTotal = desc.origem === 'branca'
+      ? (((delta % 360) + 360) % 360)
+      : (((anguloOriginal + delta) % 360) + 360) % 360;
+    if (anguloTotal !== anguloOriginal) page.setRotation(degrees(anguloTotal));
+    else if (desc.origem === 'branca' && delta) page.setRotation(degrees(anguloTotal));
 
-    const listaTracos = tracosMap[i] || [];
+    const listaTracos = (tracosMap && tracosMap[id]) || [];
     listaTracos.forEach(tr => desenharTracoNoPdf(page, tr, rawSize.width, rawSize.height, anguloTotal));
 
-    const listaTextos = itensTextoMap[i] || [];
+    const listaTextos = (itensTextoMap && itensTextoMap[id]) || [];
     for (const item of listaTextos) {
       if (item.tipo === 'marca') {
         desenharMarcaNoPdf(page, item, rawSize.width, rawSize.height, anguloTotal);
@@ -1448,7 +1808,7 @@ async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, girosMa
       const font = fontesEmbutidas[nomeFonteVarianteGlobal(item.familia, item.negrito, item.italico)];
       const charRuim = encontrarCaractereNaoSuportadoGlobal(font, item.val);
       if (charRuim) {
-        throw new Error(`O texto da página ${i + 1} contém o caractere "${charRuim}", que não é suportado pela fonte escolhida. Remova esse caractere ou troque a fonte antes de gerar o PDF.`);
+        throw new Error('O texto da página ' + (j + 1) + ' contém o caractere "' + charRuim + '", que não é suportado pela fonte escolhida. Remova esse caractere ou troque a fonte antes de gerar o PDF.');
       }
       desenharTextoMultilinhaNoPdf(page, item, font, rawSize.width, rawSize.height, anguloTotal);
     }
@@ -1459,3 +1819,5 @@ async function aplicarEdicoesEstudio(fileOrig, tracosMap, itensTextoMap, girosMa
   const outBytes = await novoDoc.save({ useObjectStreams: true });
   return new Blob([outBytes], { type: 'application/pdf' });
 }
+
+

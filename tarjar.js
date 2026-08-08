@@ -8,8 +8,9 @@ PDFTools.registrar({
     let pdfDocJs = null;
     let numPages = 0;
     
-    // Estado principal
-    // tarjas: { 0: [{x,y,w,h}], 1: [...] } - em percentual 0 a 1
+    // tarjas: mapa indice-de-pagina -> retangulos, em fracao 0-1 da pagina visual (resolucao-
+    // independente: a mesma tarja vale pro thumb, pro editor com zoom e pra rasterizacao final).
+    // { 0: [{x,y,w,h}], 1: [...] }
     let tarjas = {};
     let historico = [];
     
@@ -187,7 +188,7 @@ PDFTools.registrar({
     const layer = container.querySelector('#tj-layer');
     const cvsEditor = container.querySelector('#tj-canvas');
 
-    // Acessibilidade do modal (foco preso, Esc fecha, foco devolvido). Ver Item 2.
+    // Acessibilidade do modal (foco preso, Esc fecha, foco devolvido).
     const a11yTarjar = window.PDFTools.UI.tornarModalAcessivel(modal, {
       rotulo: 'Editor de tarjas',
       botaoFechar: () => container.querySelector('#btn-tj-fechar')
@@ -195,7 +196,7 @@ PDFTools.registrar({
     let isDrawing = false;
     let startX=0, startY=0, currentRectTemp=null;
 
-    // Zoom + nav + escala via PDFTools.Editor (Fase 2).
+    // Zoom + nav + escala via PDFTools.Editor (page-editor.js), compartilhado com Editar e Assinar.
     let paginaPdfAtual = null;
     let escalaBase = 1;
     const modalBody = container.querySelector('#tj-modal-body');
@@ -432,6 +433,7 @@ async function aplicarTarjasLogica(fileOrig, docJs, tarjasMap, dpi, aoProgredir)
 
   // A REGRA INEGOCIÁVEL: Remover metadados
   novoDoc.setTitle(''); novoDoc.setAuthor(''); novoDoc.setSubject(''); novoDoc.setKeywords([]); novoDoc.setProducer(''); novoDoc.setCreator('');
+  PDFTools.removerXMP(novoDoc);
 
   const numPages = docOriginal.getPageCount();
   const scale = dpi / 72; // Converte DPI para escala do viewport do PDFJS (onde 1.0 = 72 DPI)

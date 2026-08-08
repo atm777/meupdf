@@ -371,8 +371,11 @@ async function imagensParaPDF(arquivos, opcoes, aoProgredir) {
       const isLandscapeImg = w > h;
 
       if (opcoes.tamanho === 'ajustar') {
-        pageWidth = w;
-        pageHeight = h;
+        // Antes: pageWidth = w (pixel tratado como PONTO) → uma foto 3000×4000 px virava ~105×141 cm.
+        // Assumimos 96 DPI (padrão web) para um tamanho físico plausível: pt = px / DPI * 72 (C2).
+        const DPI_AJUSTAR = 96;
+        pageWidth = w / DPI_AJUSTAR * 72;
+        pageHeight = h / DPI_AJUSTAR * 72;
       } else {
         const dims = opcoes.tamanho === 'a4' ? TAMANHOS.a4 : TAMANHOS.carta;
         let wantLandscape = false;

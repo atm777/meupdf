@@ -8,13 +8,14 @@ PDFTools.registrar({
     let pdfDocJs = null;
     let numPages = 0;
     
-    // Estado principal
-    // assinaturas: { 0: [{tipo: 'img'|'texto', val, x, y, w, h}], ... }
+    // assinaturas: mapa indice-de-pagina -> itens. x/y/w/h em fracao 0-1 da pagina VISUAL,
+    // convertidos pra coordenada bruta do PDF so na exportacao (ver desenharRotacionado).
+    // { 0: [{tipo: 'img'|'texto', val, x, y, w, h}], ... }
     let assinaturas = {};
     let historico = [];
     let paginaAtualModal = 0;
     
-    // Assinatura Salva localmente
+    // Fica no localStorage de proposito: reassinar e o caso comum, e nada sai do aparelho.
     let assinaturaSalva = localStorage.getItem('assinatura_salva') || null;
 
     if (!document.getElementById('css-assinar')) {
@@ -246,7 +247,9 @@ PDFTools.registrar({
     const drawCanvas = container.querySelector('#as-draw');
     const ctxDraw = drawCanvas.getContext('2d', { willReadFrequently: true });
     
-    // Fix resolution
+    // Canvas com o DOBRO dos pixels do tamanho CSS e ctx.scale(2): a assinatura vira imagem no
+    // PDF, entao tracar na resolucao do CSS sairia serrilhado ao ampliar. O scale mantem as
+    // coordenadas do mouse em unidades CSS, sem precisar converter em cada evento.
     function resizeDrawCanvas() {
       const rect = drawCanvas.getBoundingClientRect();
       drawCanvas.width = rect.width * 2;
@@ -275,7 +278,6 @@ PDFTools.registrar({
       };
     });
 
-    // Lógica Desenho
     let isDrawing = false, lastX=0, lastY=0;
     
     function getDrawPos(e) {
@@ -307,7 +309,6 @@ PDFTools.registrar({
       ctxDraw.clearRect(0,0, drawCanvas.width, drawCanvas.height);
     };
 
-    // Lógica Imagem e Fundo Branco
     const imgPreviewCvs = container.querySelector('#as-preview-img');
     const imgPreviewCtx = imgPreviewCvs.getContext('2d', { willReadFrequently: true });
     let originalImgData = null;
@@ -348,7 +349,8 @@ PDFTools.registrar({
       const modo = container.querySelector('.as-cria-aba.ativa').dataset.modo;
       let targetCvs = modo === 'desenhar' ? drawCanvas : imgPreviewCvs;
       
-      // Auto crop
+      // Recorta as bordas transparentes: a pessoa assina no meio do canvas, e sem isso o item
+      // no PDF carregaria a moldura vazia inteira, ficando pequeno dentro de uma caixa enorme.
       const w = targetCvs.width, h = targetCvs.height;
       if (w === 0) return;
       const ctx = targetCvs.getContext('2d');
@@ -594,7 +596,7 @@ PDFTools.registrar({
 
     // Acessibilidade dos 3 modais do Assinar (editor de página + criar assinatura + desenho livre).
     // O modal do topo da pilha é quem trata Esc/Tab, então os internos abrindo por cima do editor
-    // funcionam certo. Ver Item 2 / PDFTools.UI.tornarModalAcessivel.
+    // funcionam certo. Ver PDFTools.UI.tornarModalAcessivel.
     const a11yEditor = window.PDFTools.UI.tornarModalAcessivel(modalEditor, {
       rotulo: 'Editor de assinatura da página',
       botaoFechar: () => container.querySelector('#btn-as-fechar')
@@ -608,7 +610,7 @@ PDFTools.registrar({
       botaoFechar: () => container.querySelector('#btn-cancelar-desenho')
     });
 
-    // Zoom + nav + escala via PDFTools.Editor (Fase 2).
+    // Zoom + nav + escala via PDFTools.Editor (page-editor.js), compartilhado com Editar e Tarjar.
     let paginaPdfAtual = null;
     let escalaBase = 1;
     const modalBody = container.querySelector('#as-modal-body');
@@ -680,7 +682,6 @@ PDFTools.registrar({
         const resizer = document.createElement('div'); resizer.className = 'as-resize-handle'; el.appendChild(resizer);
         const del = document.createElement('div'); del.className = 'as-delete-handle'; del.textContent = '✕'; el.appendChild(del);
         
-        // Interações
         el.onmousedown = (e) => startDrag(e, idx, el);
         el.ontouchstart = (e) => startDrag(e, idx, el);
         
@@ -693,7 +694,6 @@ PDFTools.registrar({
       });
     }
 
-    // Ferramentas Adicionar
     container.querySelector('#btn-add-ass').onclick = () => {
       if (!assinaturaSalva) return alert('Você precisa criar ou enviar uma assinatura primeiro.');
       salvarEstado();
@@ -729,7 +729,6 @@ PDFTools.registrar({
       }
     };
 
-    // Drag e Resize simples
     let draggingInfo = null;
     
     function startDrag(e, idx, el) {
@@ -765,7 +764,6 @@ PDFTools.registrar({
         let nL = draggingInfo.initL + dx; let nT = draggingInfo.initT + dy;
         el.style.left = nL + 'px'; el.style.top = nT + 'px';
       } else {
-        // resize proporcional
         const maxD = Math.max(dx, dy);
         el.style.width = Math.max(20, draggingInfo.initW + maxD) + 'px';
         el.style.height = Math.max(10, draggingInfo.initH + (maxD * (draggingInfo.initH/draggingInfo.initW))) + 'px';
@@ -774,7 +772,6 @@ PDFTools.registrar({
     
     function doEnd(e) {
       if (!draggingInfo) {
-        // Clica fora desmarca
         if(e.target === layer) document.querySelectorAll('.as-item-arrastavel').forEach(el=>el.classList.remove('ativo'));
         return;
       }
@@ -799,7 +796,10 @@ PDFTools.registrar({
     }
     
     container.querySelector('#btn-as-desfazer').onclick = () => {
-      if (historico.length > 0) { assinaturas = JSON.parse(historico.pop()); renderizarItensEditor(); }
+      // Convenção alinhada com Editar (estudio.js): historico[0] é o snapshot inicial (estado
+      // antes de qualquer edição) e nunca é removido, senão um clique sem nenhuma edição feita
+      // "consumiria" essa base à toa e um clique seguinte ficaria sem nada além do estado atual.
+      if (historico.length > 1) { assinaturas = JSON.parse(historico.pop()); renderizarItensEditor(); }
     };
     
     container.querySelector('#btn-as-fechar').onclick = () => {
@@ -866,8 +866,10 @@ async function assinarLote(fileOrig, assinaturasMap, aoProgredir) {
   
   const novoDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
   
-  // Limpar metadados é praxe
+  // O PDF de saida nao deve herdar autor/software do original: quem assina costuma repassar o
+  // arquivo adiante, e esses campos vazam de quem veio o documento.
   novoDoc.setTitle(''); novoDoc.setAuthor(''); novoDoc.setSubject(''); novoDoc.setKeywords([]); novoDoc.setProducer(''); novoDoc.setCreator('');
+  PDFTools.removerXMP(novoDoc);
 
   const numPages = novoDoc.getPageCount();
   const font = await novoDoc.embedFont(StandardFonts.Helvetica);
@@ -895,7 +897,6 @@ async function assinarLote(fileOrig, assinaturasMap, aoProgredir) {
           desenharRotacionado(page, pdfImg, null, item.x, item.y, item.w, item.h, rawSize.width, rawSize.height, anguloOriginal);
 
         } else {
-          // Texto
           desenharRotacionado(page, null, { txt: item.val, font, color: rgb(0,0,0) }, item.x, item.y, item.w, item.h, rawSize.width, rawSize.height, anguloOriginal);
         }
       }

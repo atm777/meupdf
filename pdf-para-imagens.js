@@ -234,7 +234,7 @@ PDFTools.registrar({
     radioZip.onchange = aoMudarSaida;
     radioSep.onchange = aoMudarSaida;
 
-    window.selecionarLotePgs = function(inicio, fim) {
+    function selecionarLotePgs(inicio, fim) {
       pagsSelecionadas.clear();
       container.querySelectorAll('.im-pagina').forEach(el => el.classList.remove('sel'));
       for(let i=inicio-1; i<fim && i<numPages; i++) {
@@ -243,7 +243,15 @@ PDFTools.registrar({
         if(el) el.classList.add('sel');
       }
       atualizarEstimativa();
-    };
+    }
+
+    // Delegação: os botões "Selecionar 1-100" são injetados via innerHTML dentro de #im-alerta-memoria
+    // (recriado a cada atualizarEstimativa), então o listener fica no pai persistente, não no botão.
+    container.querySelector('#im-alerta-memoria').addEventListener('click', (e) => {
+      const btn = e.target.closest('.im-btn-lote');
+      if (!btn) return;
+      selecionarLotePgs(parseInt(btn.dataset.inicio, 10), parseInt(btn.dataset.fim, 10));
+    });
 
     function atualizarEstimativa() {
       if(pagsSelecionadas.size === 0) {
@@ -275,10 +283,10 @@ PDFTools.registrar({
          avisoHTML += `<div style="margin-bottom:8px;">Este PDF tem <strong>${numPages}</strong> páginas. Em <strong>${dpi} DPI</strong> o resultado terá cerca de <strong>${totalMb} MB</strong> no total. A renderização é feita pelo seu navegador e pode levar alguns minutos.</div>`;
       }
       if (pagsSelecionadas.size > 300) {
-         avisoHTML += `<div>Documentos deste tamanho podem consumir muita memória, principalmente em celular. Considere converter um intervalo de páginas por vez. <button class="im-btn-link-sm" onclick="selecionarLotePgs(1, 100)">Selecionar 1-100</button></div>`;
+         avisoHTML += `<div>Documentos deste tamanho podem consumir muita memória, principalmente em celular. Considere converter um intervalo de páginas por vez. <button class="im-btn-link-sm im-btn-lote" data-inicio="1" data-fim="100">Selecionar 1-100</button></div>`;
       }
       if (totalBytes > 500 * 1024 * 1024) { 
-         avisoHTML = `⚠️ <strong>Risco de travamento!</strong> A exportação de ${pagsSelecionadas.size} páginas consumirá mais de 500MB de memória e fechará a aba do navegador. <br><br><button class="im-btn-link-sm" onclick="selecionarLotePgs(1, 100)">Selecione apenas as primeiras 100 páginas para prosseguir</button>`;
+         avisoHTML = `⚠️ <strong>Risco de travamento!</strong> A exportação de ${pagsSelecionadas.size} páginas consumirá mais de 500MB de memória e fechará a aba do navegador. <br><br><button class="im-btn-link-sm im-btn-lote" data-inicio="1" data-fim="100">Selecione apenas as primeiras 100 páginas para prosseguir</button>`;
          travar = true;
       }
       
@@ -451,5 +459,12 @@ PDFTools.registrar({
     };
 
     if (arquivoInicial) abrirArquivo(arquivoInicial);
+
+    // Sem isto, trocar de ferramenta não desliga o IntersectionObserver: como ele já teve
+    // .observe() chamado, o navegador mantém a referência (e a closure inteira de montarUI)
+    // viva mesmo depois do workspaceContent.innerHTML='' remover os elementos observados.
+    return function() {
+      visaoObserver.disconnect();
+    };
   }
 });

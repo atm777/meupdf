@@ -123,6 +123,19 @@ PDFTools.registrar({
     }
 
     async function abrirArquivo(file) {
+      // Valida pelo header %PDF antes de tentar abrir. Sem isso, um JPEG solto caía no catch como
+      // "PDF corrompido" — mentira que manda a pessoa procurar defeito num arquivo que só está no
+      // formato errado — e ainda levava a dropzone junto, sem como tentar outro arquivo.
+      const erroAntigo = container.querySelector('#ip-erro-arquivo');
+      if (erroAntigo) erroAntigo.remove();
+      if (!(await PDFTools.ehPDF(file))) {
+        const box = document.createElement('div');
+        box.id = 'ip-erro-arquivo';
+        box.style.marginTop = '12px';
+        box.innerHTML = PDFTools.erro('nao_e_pdf');
+        container.querySelector('#ip-tela-inicial').appendChild(box);
+        return;
+      }
       fileOrig = file;
       container.querySelector('#ip-tela-inicial').innerHTML = '<div style="text-align:center; padding:40px;">Fazendo varredura forense...</div>';
       try {
@@ -225,9 +238,13 @@ PDFTools.registrar({
            const cat = pdfDocLib.catalog;
            const names = cat.lookup(window.PDFLib.PDFName.of('Names'));
            if (names && names.lookup(window.PDFLib.PDFName.of('JavaScript'))) temJS = true;
-           // Também check ações de página
+           // /OpenAction só é JS quando a ação é /S /JavaScript. Sozinho ele é usadíssimo só pra
+           // definir zoom/página inicial (não é script) — acusar isso daria falso-positivo.
            const openAction = cat.lookup(window.PDFLib.PDFName.of('OpenAction'));
-           if (openAction) temJS = true; // Muitas vezes é JS
+           if (openAction && openAction.lookup) {
+              const s = openAction.lookup(window.PDFLib.PDFName.of('S'));
+              if (s && String(s).indexOf('JavaScript') !== -1) temJS = true;
+           }
         } catch(e) {}
 
         // --- Alertas Corretivos ---
@@ -266,14 +283,20 @@ PDFTools.registrar({
               try {
                 for(let i=0; i<numP; i++) {
                    if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
-                    const page = pdfDocLib.getPage(i);
+                   const page = pdfDocLib.getPage(i);
                    if(page.node) page.node.delete(window.PDFLib.PDFName.of('Annots'));
                 }
                 const bytes = await pdfDocLib.save();
-                PDFTools.baixar(new Blob([bytes], {type:'application/pdf'}), 'sem-anotacoes.pdf');
-                PDFTools.UI.mostrarToast('Anotações destruídas com sucesso.', 'sucesso');
-                div.style.display = 'none';
-              } catch(e) { PDFTools.UI.mostrarToast('Erro ao apagar.', 'erro'); }
+                const blobA = new Blob([bytes], { type: 'application/pdf' });
+                const nomeA = PDFTools.nomeSemExtensao(fileOrig.name) + '-sem-anotacoes.pdf';
+                PDFTools.baixar(blobA, nomeA);
+                PDFTools.registrarAcaoSessao('Removeu anotações');
+                PDFTools.UI.mostrarToast('Anotações removidas.', 'sucesso');
+                div.className = 'ip-alerta';
+                div.innerHTML = '<div style="flex:1;"><strong>Anotações removidas.</strong> Baixado como <em>' + nomeA + '</em>.</div>';
+                const prox = PDFTools.UI.criarProximosPassos({ blob: blobA, nomeArquivo: nomeA, origemId: 'inspecionar_pdf', tamanhoBytes: blobA.size });
+                if (prox) div.appendChild(prox);
+              } catch(e) { console.error(e); PDFTools.UI.mostrarToast('Não consegui remover as anotações.', 'erro'); }
            };
         }
         
@@ -330,6 +353,10 @@ PDFTools.registrar({
         const agora = new Date();
         if (isLimpeza) pdfDocLib.setCreationDate(agora);
         pdfDocLib.setModificationDate(agora);
+
+        // Também remove o XMP (/Metadata) — senão autor/software vazam pelo stream XMP mesmo com o
+        // /Info limpo. Vale para limpeza e edição (o XMP velho contradiria o /Info novo).
+        PDFTools.removerXMP(pdfDocLib);
 
         progressoMd.atualizar(60, 'Salvando...');
         await new Promise(r => setTimeout(r, 0));
