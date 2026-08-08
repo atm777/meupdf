@@ -640,24 +640,13 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
 
 // --- REGISTRO: um botão por tarefa humana, todos usando o mesmo motor acima ---
 
+// A ferramenta "Organizar Páginas" foi APOSENTADA: reordenar por arrasto, girar (inclusive o
+// documento inteiro), inserir e excluir passaram para o Editar, que já mostrava a mesma grade de
+// miniaturas e já sabia girar/excluir — duas telas quase iguais confundiam mais do que ajudavam.
+// Este arquivo NÃO virou morto: `montarOrganizarUI` é o motor do Dividir, que continua abaixo.
+// As opções `mostrarSelecao`/`mostrarGirar`/`mostrarRemover` seguem suportadas pelo motor, caso
+// algum foco futuro precise delas.
 const FOCOS_ORGANIZAR = [
-  {
-    id: 'organizar_paginas',
-    nome: 'Organizar Páginas',
-    descricao: 'Reordene, remova e gire páginas do PDF — tudo no navegador, sem upload.',
-    mostrarSelecao: true,
-    mostrarGirar: true,
-    mostrarRemover: true,
-    mostrarEscolhaDivisao: false,
-    mostrarProximosPassos: true,
-    acaoFixa: 'juntar', // um único PDF com o plano (ordem + giros + remoções)
-    labelBotao: 'Salvar PDF Organizado',
-    sufixoArquivo: '-organizado',
-    paramLabel: null,
-    paramValor: null,
-    explicacao: 'Arraste as miniaturas para reordenar. Clique para selecionar (Shift para intervalo). Use Girar ou Remover na barra lateral — ou o ✕ em cada página. Depois salve o PDF.',
-    acaoSessaoTexto: 'Organizou as páginas'
-  },
   {
     id: 'dividir_pdf', nome: 'Dividir PDF',
     descricao: 'Divida o PDF em vários arquivos menores — por quantidade de páginas ou por tamanho máximo em MB.',

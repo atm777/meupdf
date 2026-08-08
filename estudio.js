@@ -1,5 +1,6 @@
 // "Editar" — edições pontuais na página que você está vendo (desenho, texto, marca, giro desta
-// página). Operações em lote no documento (reordenar, girar/apagar várias) ficam no Organizar.
+// página) E a estrutura do documento (reordenar arrastando na grade, girar tudo, inserir/excluir).
+// Absorveu o antigo "Organizar" — o motor daquele arquivo (organizar.js) segue vivo só pro Dividir.
 //
 // INVARIANTE: a POSIÇÃO na lista (paginas[i]) não é a identidade da página.
 // Conteúdo (tracos/itensTexto/giros) é sempre indexado por `paginas[i].id` estável. Nunca use o
@@ -49,13 +50,14 @@ function montarEstudioUI(container, arquivoInicial, opts) {
       <div id="est-tela-inicial"></div>
       <div id="est-tela-trabalho" style="display:none;">
         <div class="est-aviso">
-          <strong>O que dá pra fazer aqui:</strong> edições pontuais na página que você está
-          vendo — desenhar, texto, grifo, girar <em>esta</em> página ou excluí-la. Para reordenar
-          ou apagar/girar <em>várias</em> de uma vez, use <strong>Organizar</strong>. Tarjar,
-          comprimir e outras ações maiores têm botão próprio na barra do topo.
+          <strong>O que dá pra fazer aqui:</strong> clique numa página para desenhar, escrever
+          ou grifar. <strong>Arraste as páginas</strong> para mudar a ordem, use o <strong>✕</strong>
+          para excluir e o <strong>+</strong> para inserir uma folha em branco. Para endireitar um
+          documento digitalizado torto, marque <em>todas as páginas</em> ao lado do Girar.
+          Tarjar, comprimir e outras ações maiores têm botão próprio na barra do topo.
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-          <div style="font-size:16px; font-weight:bold; color:var(--texto);">Clique numa página para editar:</div>
+          <div style="font-size:16px; font-weight:bold; color:var(--texto);">Clique para editar &middot; arraste para reordenar:</div>
           <button class="est-btn-acao" id="btn-gerar" style="width:auto; padding:10px 20px;">Gerar PDF Editado</button>
         </div>
         <div class="est-grade" id="est-grade"></div>
@@ -107,10 +109,14 @@ function montarEstudioUI(container, arquivoInicial, opts) {
               <button type="button" class="pdf-paleta-btn est-modo-btn${modoInicial === 'marca' ? ' ativo' : ''}" data-modo="marca" role="radio" aria-checked="${modoInicial === 'marca'}" title="Marca (M)">${window.PDFTools.iconeSVG('ui-marca')}<span>Marca</span></button>
             </div>
 
-            <div class="pdf-paleta-grupo" role="group" aria-label="Esta página">
-              <div class="pdf-paleta-grupo-rotulo">esta página</div>
+            <div class="pdf-paleta-grupo" role="group" aria-label="Páginas">
+              <div class="pdf-paleta-grupo-rotulo">páginas</div>
               <div class="pdf-paleta-acao-grupo">
-                <button type="button" class="pdf-paleta-btn est-btn" id="btn-est-girar" title="Girar a página 90° no sentido horário">${window.PDFTools.iconeSVG('ui-girar')}<span>Girar</span></button>
+                <button type="button" class="pdf-paleta-btn est-btn" id="btn-est-girar" title="Girar 90° no sentido horário">${window.PDFTools.iconeSVG('ui-girar')}<span>Girar</span></button>
+                <label class="est-girar-todas" title="Gira o documento inteiro — útil quando a digitalização saiu toda de cabeça para baixo">
+                  <input type="checkbox" id="chk-est-girar-todas">
+                  <span>todas as páginas</span>
+                </label>
                 <button type="button" class="pdf-paleta-btn est-btn" id="btn-est-inserir-branca" title="Inserir página em branco depois desta">${window.PDFTools.iconeSVG('ui-inserir')}<span>Em branco</span></button>
                 <button type="button" class="pdf-paleta-btn est-btn perigo est-btn-excluir-pagina" id="btn-est-excluir-pagina" title="Excluir esta página">${window.PDFTools.iconeSVG('ui-excluir')}<span>Excluir</span></button>
               </div>
@@ -250,6 +256,80 @@ function montarEstudioUI(container, arquivoInicial, opts) {
       }
     }
 
+    // --- REORDENAR (arrastar na grade) ---
+    // Só funciona porque o conteúdo é indexado por `paginas[i].id` estável, nunca por posição
+    // (ver INVARIANTE no topo): mover o descritor de lugar no array leva traço, texto e giro
+    // junto, sem precisar remapear nada.
+    // Não existe guarda de "acabei de arrastar": o HTML5 drag-and-drop nativo não dispara click
+    // depois do drop, e renderizarGrade() recria os elementos no fim do movimento. Uma guarda aqui
+    // engolia o PRÓXIMO clique legítimo, deixando a grade sem responder após cada reordenação.
+    let posArrastada = null;
+
+    function limparMarcasArrasto() {
+      container.querySelectorAll('.est-pagina').forEach(el => {
+        el.classList.remove('est-arrastando', 'est-alvo-antes', 'est-alvo-depois');
+      });
+    }
+
+    function moverPagina(de, para) {
+      if (de === para || de == null || para == null) return;
+      if (de < 0 || de >= numPaginas() || para < 0 || para >= numPaginas()) return;
+      salvarEstado();
+      const [desc] = paginas.splice(de, 1);
+      paginas.splice(para, 0, desc);
+
+      // O editor segue a página que a pessoa moveu, não a posição onde ela estava: se a página 5
+      // virou a 1, quem está aberto continua sendo a mesma folha.
+      if (paginaAtualModal === de) paginaAtualModal = para;
+      else if (de < paginaAtualModal && para >= paginaAtualModal) paginaAtualModal--;
+      else if (de > paginaAtualModal && para <= paginaAtualModal) paginaAtualModal++;
+
+      idxEditando = null;
+      renderizarGrade();
+    }
+
+    function ligarArrasto(el, i) {
+      el.draggable = true;
+      el.addEventListener('dragstart', (e) => {
+        posArrastada = i;
+        e.dataTransfer.effectAllowed = 'move';
+        // Firefox só dispara o arrasto se algo for escrito no dataTransfer.
+        try { e.dataTransfer.setData('text/plain', String(i)); } catch (err) {}
+        el.classList.add('est-arrastando');
+      });
+      el.addEventListener('dragover', (e) => {
+        if (posArrastada === null || posArrastada === i) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        // Marca de que lado a página vai cair, para o alvo não ser adivinhação.
+        const r = el.getBoundingClientRect();
+        const depois = (e.clientX - r.left) > r.width / 2;
+        el.classList.toggle('est-alvo-depois', depois);
+        el.classList.toggle('est-alvo-antes', !depois);
+      });
+      el.addEventListener('dragleave', () => {
+        el.classList.remove('est-alvo-antes', 'est-alvo-depois');
+      });
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (posArrastada === null || posArrastada === i) { limparMarcasArrasto(); return; }
+        const r = el.getBoundingClientRect();
+        const depois = (e.clientX - r.left) > r.width / 2;
+        // Tirar a página de trás desloca o alvo uma casa para a esquerda.
+        let destino = depois ? i + 1 : i;
+        if (posArrastada < destino) destino--;
+        const de = posArrastada;
+        posArrastada = null;
+        limparMarcasArrasto();
+        moverPagina(de, destino);
+      });
+      el.addEventListener('dragend', () => {
+        posArrastada = null;
+        limparMarcasArrasto();
+      });
+    }
+
     function renderizarGrade() {
       const grade = container.querySelector('#est-grade');
       grade.innerHTML = '';
@@ -279,6 +359,7 @@ function montarEstudioUI(container, arquivoInicial, opts) {
             excluirPagina(i, { origem: 'grade' });
           };
         }
+        if (!soUma) ligarArrasto(el, i);
         grade.appendChild(el);
         if (paginas[i].origem === 'pdf') visaoObserver.observe(el);
         else renderizarMiniatura(el);
@@ -781,7 +862,55 @@ function montarEstudioUI(container, arquivoInicial, opts) {
       recalcularEscalaBase();
       renderizarPaginaNoCanvas(controleZoom.obterZoom());
     }
-    container.querySelector('#btn-est-girar').onclick = () => girarPagina(90);
+    // Gira o documento INTEIRO. Caso de uso real: digitalização que saiu toda de cabeça para baixo
+    // ou deitada — corrigir página por página em 40 folhas é inviável.
+    //
+    // Duas trilhas de propósito. Página SEM anotação (o caso da digitalização torta) só precisa de
+    // `giros[id] += delta`, sem tocar o pdf.js. Página COM anotação precisa remapear traço/texto/
+    // marca, e isso exige as dimensões visuais antes e depois — que só o objeto pdf.js entrega,
+    // por isso a função é async. Evitar esse await onde não há o que remapear é o que mantém o
+    // giro instantâneo num PDF grande.
+    async function girarTodasPaginas(delta) {
+      if (numPaginas() === 0) return;
+      // Um único snapshot: desfazer devolve o documento inteiro de uma vez, não página por página.
+      salvarEstado();
+
+      for (let pos = 0; pos < numPaginas(); pos++) {
+        const desc = paginas[pos];
+        const id = desc.id;
+        const temConteudo = (itensTexto[id] || []).length > 0 || (tracos[id] || []).length > 0;
+
+        if (temConteudo) {
+          const antes = await dimsVisuaisPosAsync(pos);
+          giros[id] = (((giros[id] || 0) + delta) % 360 + 360) % 360;
+          const depois = await dimsVisuaisPosAsync(pos);
+          (itensTexto[id] || []).forEach(item => {
+            if (item.tipo === 'marca') remapMarca(item, delta);
+            else remapTexto(item, delta, antes.width, antes.height, depois.width, depois.height);
+          });
+          (tracos[id] || []).forEach(tr => {
+            tr.pontosNorm = (tr.pontosNorm || []).map(p => remapPontoFrac(p.x, p.y, delta));
+          });
+        } else {
+          giros[id] = (((giros[id] || 0) + delta) % 360 + 360) % 360;
+        }
+      }
+
+      idxEditando = null;
+      renderizarGrade();
+      // Só refaz a tela do editor se ele estiver aberto — girar tudo também vale a partir da grade.
+      if (window.getComputedStyle(modalEditor).display !== 'none') {
+        recalcularEscalaBase();
+        renderizarPaginaNoCanvas(controleZoom.obterZoom());
+      }
+      PDFTools.UI.mostrarToast('Todas as ' + numPaginas() + ' páginas foram giradas.', 'sucesso');
+    }
+
+    container.querySelector('#btn-est-girar').onclick = () => {
+      const todas = container.querySelector('#chk-est-girar-todas');
+      if (todas && todas.checked) girarTodasPaginas(90);
+      else girarPagina(90);
+    };
 
     // --- LÁPIS: desenho vetorial direto sobre a página ---
     container.querySelectorAll('#est-painel-lapis .est-lapis-tamanho').forEach(btn => {
