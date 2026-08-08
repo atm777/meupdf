@@ -23,16 +23,16 @@ PDFTools.registrar({
         .img-thumb { width: 100%; height: 80px; object-fit: cover; border-radius: 2px; margin-bottom: 4px; }
         .img-nome { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; text-align: center; }
         .img-acoes { display: flex; justify-content: space-between; }
-        .img-acoes button { background: var(--sup-2); border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 12px; }
-        .img-acoes button:hover { background: #dde0e3; }
+        .img-acoes button { background: var(--sup-2); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 12px; }
+        .img-acoes button:hover { background: var(--sup-2); }
         .img-acoes button.del { color: var(--cor-erro); font-weight: bold; }
         .ordenacao-acoes { display: flex; gap: 8px; margin-top: 16px; }
         .ordenacao-acoes button { font-size: 12px; padding: 6px 12px; cursor: pointer; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; }
-        .ordenacao-acoes button:hover { background: #f0f0f0; }
+        .ordenacao-acoes button:hover { background: var(--sup-2); }
         .opcoes-grupo { margin-bottom: 16px; }
         .opcoes-grupo label { display: block; font-size: 14px; font-weight: bold; margin-bottom: 4px; }
         .opcoes-grupo select, .opcoes-grupo input { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--borda); font-size: 14px; box-sizing: border-box; }
-        .area-resultado { margin-top: 24px; padding: 16px; border: 1px solid var(--cor-sucesso); border-radius: 8px; background: #eaffea; display: none; }
+        .area-resultado { margin-top: 24px; padding: 16px; border: 1px solid var(--cor-sucesso); border-radius: 8px; background: var(--cor-sucesso-fundo); display: none; }
         .area-resultado p { margin: 0 0 12px 0; font-weight: bold; color: var(--cor-sucesso); }
       `;
       document.head.appendChild(style);

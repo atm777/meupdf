@@ -115,11 +115,10 @@ PDFTools.registrar({
     const progresso = PDFTools.UI.criarProgresso();
     container.querySelector('#tj-progresso-container').appendChild(progresso.elemento);
 
-    let visaoObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) renderizarMiniatura(entry.target);
-      });
-    }, { rootMargin: '200px' });
+    const Ed = PDFTools.Editor;
+    const visaoObserver = Ed.criarObserverMiniaturas((el) => {
+      Ed.renderizarMiniaturaPdf(pdfDocJs, el, { containerSeletor: '.tj-thumb-container' });
+    });
 
     async function abrirArquivo(file) {
       // Valida pelo header %PDF (ehPDF), não pelo file.type — um .pdf pode chegar com MIME vazio
@@ -146,8 +145,8 @@ PDFTools.registrar({
         
         renderizarGrade();
       } catch (err) {
-        if (err.name === 'PasswordException') container.querySelector('#tj-tela-inicial').innerHTML = PDFTools.erro('pdf_protegido');
-        else container.querySelector('#tj-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido', err.message);
+        const cod = PDFTools.classificarErro(err);
+        container.querySelector('#tj-tela-inicial').innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (err && err.message) : null);
       }
     }
 
@@ -183,21 +182,6 @@ PDFTools.registrar({
       }
     }
 
-    async function renderizarMiniatura(el) {
-      if (el.dataset.rendered) return;
-      el.dataset.rendered = "true";
-      const index = parseInt(el.dataset.index);
-      try {
-        const page = await pdfDocJs.getPage(index + 1);
-        const viewport = page.getViewport({ scale: 0.3 }); 
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        const container = el.querySelector('.tj-thumb-container');
-        container.appendChild(canvas);
-      } catch(e) {}
-    }
-
     // --- EDITOR ---
     const modal = container.querySelector('#tj-modal');
     const layer = container.querySelector('#tj-layer');
@@ -211,58 +195,27 @@ PDFTools.registrar({
     let isDrawing = false;
     let startX=0, startY=0, currentRectTemp=null;
 
-    // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página;
-    // o fator do controle de zoom multiplica em cima disso. Lupa/botões no desktop, pinça de
-    // dois dedos no celular (ver criarControleZoom em ui.js).
+    // Zoom + nav + escala via PDFTools.Editor (Fase 2).
     let paginaPdfAtual = null;
     let escalaBase = 1;
     const modalBody = container.querySelector('#tj-modal-body');
-    const controleZoom = window.PDFTools.UI.criarControleZoom({
-      superficieToque: modalBody,
-      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); }
-    });
-    container.querySelector('#tj-zoom-slot').appendChild(controleZoom.elemento);
-
-    // Setas ▲/▼ do lado da página pra trocar de página sem sair do editor.
-    const navegadorPaginas = window.PDFTools.UI.criarNavegadorPaginas({
+    const { controleZoom, navegadorPaginas } = Ed.montarZoomENav({
+      modalBody,
+      zoomSlot: container.querySelector('#tj-zoom-slot'),
+      navSlot: container.querySelector('#tj-nav-paginas-slot'),
+      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); },
       aoNavegar: (novoIndice) => abrirEditor(novoIndice)
     });
-    container.querySelector('#tj-nav-paginas-slot').appendChild(navegadorPaginas.elemento);
-
-    // Usa o espaço realmente disponível dentro de #tj-modal-body (já descontada a barra do topo
-    // e a faixa do navegador de páginas) em vez de um chute em cima de window.innerHeight —
-    // senão a página "ajustada à tela" fica maior do que cabe de verdade.
-    function calcularEscalaAjuste(viewportRef, fatorMaximo) {
-      // Padding real do .tj-modal-body (muda por media query em telas baixas) em vez de fixo.
-      const cs = getComputedStyle(modalBody);
-      const padH = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-      const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-      const larguraNav = navegadorPaginas.elemento.offsetWidth ? navegadorPaginas.elemento.offsetWidth + 16 : 0;
-      const maxWidth = Math.max(100, modalBody.clientWidth - padH - larguraNav);
-      const maxHeight = Math.max(100, modalBody.clientHeight - padV);
-      return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
-    }
 
     async function renderizarPaginaNoCanvas(fatorZoom) {
-      const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom });
-      cvsEditor.width = viewport.width;
-      cvsEditor.height = viewport.height;
-
-      const ctx = cvsEditor.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,cvsEditor.width, cvsEditor.height);
-      await paginaPdfAtual.render({ canvasContext: ctx, viewport }).promise;
-
+      await Ed.renderCanvasPagina(paginaPdfAtual, cvsEditor, escalaBase * fatorZoom);
       renderizarTarjasEditor();
     }
 
     async function abrirEditor(index) {
       paginaAtualModal = index;
       container.querySelector('#tj-modal-pagina').textContent = index + 1;
-      modal.style.display = 'flex';
-      // Neutraliza o backdrop-filter do #workspace enquanto o modal está aberto (ver regra CSS
-      // body.pdf-editor-modal-aberto #workspace): sem isso o filtro prende o position:fixed do
-      // modal dentro do workspace em vez da viewport, e a página fica menor do que caberia.
-      document.body.classList.add('pdf-editor-modal-aberto');
+      Ed.abrirModalEditor(modal);
       layer.innerHTML = '';
       navegadorPaginas.atualizar(index, numPages);
 
@@ -270,24 +223,23 @@ PDFTools.registrar({
       paginaPdfAtual = page;
 
       const viewportRef = page.getViewport({ scale: 1.0 });
-      escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
+      escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
+        fatorMaximo: 1.5,
+        navEl: navegadorPaginas.elemento
+      });
 
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
     }
 
-    // Recalcula o "ajustar à tela" ao mudar o tamanho da janela / girar o celular.
-    let _resizeRafTj = null;
-    function aoRedimensionarTarjar() {
-      if (modal.style.display === 'none' || !paginaPdfAtual) return;
-      if (_resizeRafTj) cancelAnimationFrame(_resizeRafTj);
-      _resizeRafTj = requestAnimationFrame(() => {
-        const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
-        escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
-        renderizarPaginaNoCanvas(controleZoom.obterZoom());
-      });
-    }
-    window.addEventListener('resize', aoRedimensionarTarjar);
-    window.addEventListener('orientationchange', aoRedimensionarTarjar);
+    const resizeEditor = Ed.criarResizeEditor({
+      modalEl: modal,
+      modalBody,
+      navEl: navegadorPaginas.elemento,
+      getPaginaPdf: () => paginaPdfAtual,
+      fatorMaximo: 1.5,
+      setEscalaBase: (n) => { escalaBase = n; },
+      render: () => renderizarPaginaNoCanvas(controleZoom.obterZoom())
+    });
 
     function renderizarTarjasEditor() {
       layer.innerHTML = '';
@@ -319,12 +271,8 @@ PDFTools.registrar({
 
     // Handlers Desenho
     function getEventPos(e) {
-      const rect = layer.getBoundingClientRect();
-      let cx, cy;
-      if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
-      else if (e.changedTouches && e.changedTouches.length > 0) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
-      else { cx = e.clientX; cy = e.clientY; }
-      return { x: cx - rect.left, y: cy - rect.top, wBox: rect.width, hBox: rect.height };
+      const p = Ed.posicaoNoElemento(e, layer);
+      return { x: p.x, y: p.y, wBox: p.w, hBox: p.h };
     }
 
     function onStart(e) {
@@ -406,8 +354,7 @@ PDFTools.registrar({
     };
 
     container.querySelector('#btn-tj-fechar').onclick = () => {
-      modal.style.display = 'none';
-      document.body.classList.remove('pdf-editor-modal-aberto');
+      Ed.fecharModalEditor(modal);
       atualizarBadgesNaGrade();
     };
 
@@ -454,8 +401,7 @@ PDFTools.registrar({
         PDFTools.registrarAcaoSessao('Tarjou o documento');
 
       } catch (err) {
-        console.error(err);
-        PDFTools.UI.mostrarToast('Erro: ' + err.message, 'erro');
+        PDFTools.UI.toastErro(err);
       } finally {
         progresso.esconder();
         btn.disabled = false;
@@ -467,9 +413,8 @@ PDFTools.registrar({
     // Cleanup chamado por index.html ao trocar de ferramenta ou voltar pra home.
     return function limparTarjar() {
       document.removeEventListener('keydown', aoTecladoTarjar);
-      window.removeEventListener('resize', aoRedimensionarTarjar);
-      window.removeEventListener('orientationchange', aoRedimensionarTarjar);
-      document.body.classList.remove('pdf-editor-modal-aberto');
+      try { resizeEditor.destruir(); } catch (e) {}
+      Ed.fecharModalEditor(modal);
       try { a11yTarjar.destruir(); } catch (e) {}
       try { visaoObserver.disconnect(); } catch (e) {}
     };

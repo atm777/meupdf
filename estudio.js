@@ -1,7 +1,7 @@
 // "Editar" — ferramenta de pequenas edições: a pessoa escolhe uma página e desenha à mão livre
 // ou inclui caixas de texto diretamente sobre o conteúdo do PDF. Não é um editor completo — para
-// girar/remover/reordenar páginas, tarjar, comprimir, dividir etc. há um botão específico pra
-// cada uma na barra de ferramentas do topo.
+// girar/remover/reordenar páginas use Organizar; tarjar, comprimir, dividir etc. têm botão
+// próprio na barra de ferramentas do topo.
 function montarEstudioUI(container, arquivoInicial) {
     let fileOrig = null;
     let pdfDocJs = null;
@@ -37,8 +37,8 @@ function montarEstudioUI(container, arquivoInicial) {
         .est-badge { position: absolute; bottom: 4px; right: 4px; background: var(--cor-sucesso); color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold; display: none; }
 
         .est-btn-acao { padding: 12px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; }
-        .est-btn-acao:hover { background: #004494; }
-        .est-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
+        .est-btn-acao:hover { background: var(--cor-primaria-hover, var(--acento-hover)); }
+        .est-btn-acao:disabled { background: var(--sup-2); color: var(--texto-2); opacity: 0.45; cursor: not-allowed; }
         .est-btn { padding: 6px 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--texto); }
         .est-btn:hover { background: var(--sup-2); }
 
@@ -238,11 +238,20 @@ function montarEstudioUI(container, arquivoInicial) {
       onArquivos: (arquivos) => abrirArquivo(arquivos[0])
     }));
 
-    let visaoObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => { if (entry.isIntersecting) renderizarMiniatura(entry.target); });
-    }, { rootMargin: '200px' });
+    const Ed = PDFTools.Editor;
+    const visaoObserver = Ed.criarObserverMiniaturas((el) => {
+      Ed.renderizarMiniaturaPdf(pdfDocJs, el, {
+        containerSeletor: '.est-thumb-container',
+        getRotation: (index, page) =>
+          ((((page.rotate || 0) + (giros[index] || 0)) % 360) + 360) % 360
+      });
+    });
 
     async function abrirArquivo(file) {
+      if (!(await PDFTools.ehPDF(file))) {
+        telaInicial.innerHTML = PDFTools.erro('nao_e_pdf');
+        return;
+      }
       fileOrig = file;
       telaInicial.innerHTML = '<div style="text-align:center; padding: 40px; color: var(--texto-2);">Carregando PDF...</div>';
       try {
@@ -259,8 +268,8 @@ function montarEstudioUI(container, arquivoInicial) {
         telaTrabalho.style.display = 'block';
         renderizarGrade();
       } catch (err) {
-        if (err.name === 'PasswordException') telaInicial.innerHTML = PDFTools.erro('pdf_protegido');
-        else telaInicial.innerHTML = PDFTools.erro('pdf_corrompido', err.message);
+        const cod = PDFTools.classificarErro(err);
+        telaInicial.innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (err && err.message) : null);
       }
     }
 
@@ -291,20 +300,12 @@ function montarEstudioUI(container, arquivoInicial) {
       }
     }
 
-    async function renderizarMiniatura(el) {
-      if (el.dataset.rendered) return;
-      el.dataset.rendered = "true";
-      const index = parseInt(el.dataset.index);
-      try {
-        const page = await pdfDocJs.getPage(index + 1);
-        // A miniatura reflete o giro aplicado no editor (rotação original + delta desta página).
-        const rot = ((((page.rotate || 0) + (giros[index] || 0)) % 360) + 360) % 360;
-        const viewport = page.getViewport({ scale: 0.3, rotation: rot });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        el.querySelector('.est-thumb-container').appendChild(canvas);
-      } catch (e) {}
+    function renderizarMiniatura(el) {
+      return Ed.renderizarMiniaturaPdf(pdfDocJs, el, {
+        containerSeletor: '.est-thumb-container',
+        getRotation: (index, page) =>
+          ((((page.rotate || 0) + (giros[index] || 0)) % 360) + 360) % 360
+      });
     }
 
     // --- EDITOR DE PÁGINA ---
@@ -355,53 +356,24 @@ function montarEstudioUI(container, arquivoInicial) {
     let marcaCorAtual = '#ffeb3b';
     let marcaEmAndamento = null; // { elemento, startXFrac, startYFrac }
 
-    // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página (ou ao
-    // entrar/sair da tela cheia); o fator do controle de zoom multiplica em cima disso. Lupa/
-    // botões no desktop, pinça de dois dedos no celular (ver criarControleZoom em ui.js).
+    // Zoom + nav via PDFTools.Editor (Fase 2).
     const modalBody = container.querySelector('#est-modal-body');
-    const controleZoom = window.PDFTools.UI.criarControleZoom({
-      superficieToque: modalBody,
-      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); }
-    });
-    container.querySelector('#est-zoom-slot').appendChild(controleZoom.elemento);
-
-    // Setas ▲/▼ do lado da página pra trocar de página sem sair do editor — como o modal nunca
-    // fecha nessa troca, zoom e tela cheia (se já estiver ativa) continuam do jeito que estavam.
-    const navegadorPaginas = window.PDFTools.UI.criarNavegadorPaginas({
+    const { controleZoom, navegadorPaginas } = Ed.montarZoomENav({
+      modalBody,
+      zoomSlot: container.querySelector('#est-zoom-slot'),
+      navSlot: container.querySelector('#est-nav-paginas-slot'),
+      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); },
       aoNavegar: (novoIndice) => abrirEditor(novoIndice)
     });
-    container.querySelector('#est-nav-paginas-slot').appendChild(navegadorPaginas.elemento);
 
     function obterEscalaAtual() {
       return escalaBase * controleZoom.obterZoom();
     }
 
-    // Usa o espaço realmente disponível dentro de #est-modal-body (já descontada a barra do topo,
-    // que pode ocupar 1 ou 2 linhas dependendo da largura da tela, e a faixa do navegador de
-    // páginas) em vez de um chute em cima de window.innerHeight — senão a página "ajustada à
-    // tela" fica maior do que cabe de verdade e a parte de cima acaba renderizada atrás da barra
-    // do topo (inacessível a cliques/toque).
-    function calcularEscalaAjuste(viewportRef, fatorMaximo) {
-      // Lê o padding real do .est-modal-body (que muda por media query em telas baixas/estreitas)
-      // em vez de um valor fixo — assim a constante nunca "mente" quando o CSS responsivo reduz o
-      // padding, e a página aproveita exatamente o espaço disponível.
-      const cs = getComputedStyle(modalBody);
-      const padH = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-      const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-      const larguraNav = navegadorPaginas.elemento.offsetWidth ? navegadorPaginas.elemento.offsetWidth + 16 : 0; // +16 = gap
-      const maxWidth = Math.max(100, modalBody.clientWidth - padH - larguraNav);
-      const maxHeight = Math.max(100, modalBody.clientHeight - padV);
-      return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
-    }
-
     async function renderizarPaginaNoCanvas(fatorZoom) {
-      const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom, rotation: anguloVisualAtual() });
-      cvsEditor.width = viewport.width; cvsEditor.height = viewport.height;
-
-      const ctx = cvsEditor.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cvsEditor.width, cvsEditor.height);
-      await paginaPdfAtual.render({ canvasContext: ctx, viewport }).promise;
-
+      await Ed.renderCanvasPagina(paginaPdfAtual, cvsEditor, escalaBase * fatorZoom, {
+        rotation: anguloVisualAtual()
+      });
       redesenharTracos();
       renderizarItensEditor();
     }
@@ -410,12 +382,7 @@ function montarEstudioUI(container, arquivoInicial) {
       paginaAtualModal = index;
       idxEditando = null;
       container.querySelector('#est-modal-pagina').textContent = index + 1;
-      modalEditor.style.display = 'flex';
-      // Neutraliza o backdrop-filter do #workspace enquanto o modal está aberto: esse filtro cria
-      // um containing-block que prende o position:fixed do modal dentro do workspace (não da
-      // viewport). Como o modal cobre tudo, tirar o blur é invisível — e a página passa a usar a
-      // tela inteira. Ver regra `body.pdf-editor-modal-aberto #workspace` no CSS.
-      document.body.classList.add('pdf-editor-modal-aberto');
+      Ed.abrirModalEditor(modalEditor);
       layer.innerHTML = '';
       navegadorPaginas.atualizar(index, numPages);
 
@@ -426,7 +393,10 @@ function montarEstudioUI(container, arquivoInicial) {
       visPageWidthPt = viewportRef.width;
       visPageHeightPt = viewportRef.height;
 
-      escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
+      escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
+        fatorMaximo: 1.5,
+        navEl: navegadorPaginas.elemento
+      });
 
       definirModo('mover');
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
@@ -505,7 +475,10 @@ function montarEstudioUI(container, arquivoInicial) {
       const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
       visPageWidthPt = viewportRef.width;
       visPageHeightPt = viewportRef.height;
-      escalaBase = calcularEscalaAjuste(viewportRef, emTelaCheia ? 3 : 1.5);
+      escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
+        fatorMaximo: emTelaCheia ? 3 : 1.5,
+        navEl: navegadorPaginas.elemento
+      });
     }
 
     function girarPagina(delta) {
@@ -1142,14 +1115,7 @@ function montarEstudioUI(container, arquivoInicial) {
       }
     }
 
-    // mousemove/mouseup vão no document, não no layer: assim que o arrasto sai de cima do item
-    // pequeno (pointer-events:auto só nos itens, não no layer vazio em volta), um listener preso
-    // ao layer para de receber os eventos no meio do gesto. draggingInfo!=null já garante que só
-    // faz algo quando um arrasto está de fato em andamento.
-    document.addEventListener('mousemove', doMove);
-    document.addEventListener('mouseup', doEnd);
-    document.addEventListener('touchmove', doMove, { passive: false });
-    document.addEventListener('touchend', doEnd);
+    const arrastoDoc = Ed.ouvirArrastoDocumento({ onMove: doMove, onEnd: doEnd });
     layer.addEventListener('click', doEnd);
 
     // --- DESFAZER ---
@@ -1182,8 +1148,7 @@ function montarEstudioUI(container, arquivoInicial) {
 
     container.querySelector('#btn-est-fechar').onclick = () => {
       if (document.fullscreenElement === modalEditor) document.exitFullscreen().catch(() => {});
-      modalEditor.style.display = 'none';
-      document.body.classList.remove('pdf-editor-modal-aberto');
+      Ed.fecharModalEditor(modalEditor);
       // Re-renderiza a miniatura da página recém-editada pra refletir giro/conteúdo na grade.
       const elPag = container.querySelector(`.est-pagina[data-index="${paginaAtualModal}"]`);
       if (elPag) {
@@ -1220,19 +1185,23 @@ function montarEstudioUI(container, arquivoInicial) {
     }
     document.addEventListener('fullscreenchange', aoMudarFullscreenEstudio);
 
-    // Recalcula o "ajustar à tela" quando a janela muda de tamanho ou o celular gira — senão a
-    // página fica com a escala calculada para o tamanho antigo (grande demais ou pequena demais).
-    let _resizeRaf = null;
-    function aoRedimensionarEstudio() {
-      if (modalEditor.style.display === 'none' || !paginaPdfAtual) return;
-      if (_resizeRaf) cancelAnimationFrame(_resizeRaf);
-      _resizeRaf = requestAnimationFrame(() => {
-        recalcularEscalaBase();
-        renderizarPaginaNoCanvas(controleZoom.obterZoom());
-      });
-    }
-    window.addEventListener('resize', aoRedimensionarEstudio);
-    window.addEventListener('orientationchange', aoRedimensionarEstudio);
+    const resizeEditor = Ed.criarResizeEditor({
+      modalEl: modalEditor,
+      modalBody,
+      navEl: navegadorPaginas.elemento,
+      getPaginaPdf: () => paginaPdfAtual,
+      getRotation: () => anguloVisualAtual(),
+      getFatorMaximo: () => (document.fullscreenElement === modalEditor ? 3 : 1.5),
+      setEscalaBase: (n) => {
+        escalaBase = n;
+        if (paginaPdfAtual) {
+          const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0, rotation: anguloVisualAtual() });
+          visPageWidthPt = viewportRef.width;
+          visPageHeightPt = viewportRef.height;
+        }
+      },
+      render: () => renderizarPaginaNoCanvas(controleZoom.obterZoom())
+    });
 
     // --- GERAR PDF ---
     container.querySelector('#btn-gerar').onclick = async () => {
@@ -1265,8 +1234,7 @@ function montarEstudioUI(container, arquivoInicial) {
         PDFTools.registrarAcaoSessao('Fez pequenas edições no documento');
 
       } catch (err) {
-        console.error(err);
-        PDFTools.UI.mostrarToast('Erro: ' + err.message, 'erro');
+        PDFTools.UI.toastErro(err);
       } finally {
         progresso.esconder();
         btn.disabled = false;
@@ -1278,15 +1246,11 @@ function montarEstudioUI(container, arquivoInicial) {
     // Cleanup chamado por index.html ao trocar de ferramenta ou voltar pra home: remove todos os
     // listeners que ficam no `document` (mesmas referências) e desliga o observer de miniaturas.
     return function limparEstudio() {
-      document.removeEventListener('mousemove', doMove);
-      document.removeEventListener('mouseup', doEnd);
-      document.removeEventListener('touchmove', doMove);
-      document.removeEventListener('touchend', doEnd);
+      try { arrastoDoc.destruir(); } catch (e) {}
+      try { resizeEditor.destruir(); } catch (e) {}
       document.removeEventListener('keydown', aoTecladoEstudio);
       document.removeEventListener('fullscreenchange', aoMudarFullscreenEstudio);
-      window.removeEventListener('resize', aoRedimensionarEstudio);
-      window.removeEventListener('orientationchange', aoRedimensionarEstudio);
-      document.body.classList.remove('pdf-editor-modal-aberto');
+      Ed.fecharModalEditor(modalEditor);
       try { a11yEditor.destruir(); } catch (e) {}
       try { visaoObserver.disconnect(); } catch (e) {}
     };

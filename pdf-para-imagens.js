@@ -32,14 +32,14 @@ PDFTools.registrar({
 
         .im-campo { margin-bottom: 12px; }
         .im-campo label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--texto-2); }
-        .im-input { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+        .im-input { width: 100%; padding: 8px; border: 1px solid var(--borda); border-radius: 4px; font-size: 14px; box-sizing: border-box; background: var(--sup); color: var(--texto); }
         
-        .im-aviso { background: #eaffea; color: #28a745; padding: 12px; border-radius: 4px; font-size: 12px; border: 1px solid #b3e6b3; margin-top: 16px; }
-        .im-alerta { background: rgba(255, 193, 7, 0.2); color: #ffc107; padding: 12px; border-radius: 4px; font-size: 12px; border: 1px solid rgba(255, 193, 7, 0.4); margin-top: 8px; display:none; }
+        .im-aviso { background: var(--cor-sucesso-fundo); color: var(--cor-sucesso); padding: 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--cor-sucesso); margin-top: 16px; }
+        .im-alerta { background: var(--aviso-fundo); color: var(--aviso); padding: 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--aviso-borda); margin-top: 8px; display:none; }
         
         .im-btn-acao { padding: 12px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; }
-        .im-btn-acao:hover { background: #004494; }
-        .im-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
+        .im-btn-acao:hover:not(:disabled) { background: var(--cor-primaria-hover, var(--acento-hover)); }
+        .im-btn-acao:disabled { background: var(--sup-2); color: var(--texto-2); opacity: 0.45; cursor: not-allowed; }
         .im-btn-link { background: none; border: none; color: var(--cor-primaria); cursor: pointer; font-size: 13px; text-decoration: underline; padding: 0; margin-bottom: 12px; }
         .im-btn-link-sm { background: none; border: none; color: var(--cor-primaria); cursor: pointer; font-size: 12px; text-decoration: underline; padding: 0; margin-left: 6px; }
       `;
@@ -134,6 +134,10 @@ PDFTools.registrar({
     }, { rootMargin: '200px' });
 
     async function abrirArquivo(file) {
+      if (!(await PDFTools.ehPDF(file))) {
+        container.querySelector('#im-tela-inicial').innerHTML = PDFTools.erro('nao_e_pdf');
+        return;
+      }
       fileOrig = file;
       container.querySelector('#im-tela-inicial').innerHTML = '<div style="text-align:center; padding:40px;">Carregando...</div>';
       try {
@@ -158,8 +162,8 @@ PDFTools.registrar({
         renderizarGrade();
         atualizarEstimativa();
       } catch (e) {
-        if (e.name === 'PasswordException') container.querySelector('#im-tela-inicial').innerHTML = PDFTools.erro('pdf_protegido');
-        else container.querySelector('#im-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido', e.message);
+        const cod = PDFTools.classificarErro(e);
+        container.querySelector('#im-tela-inicial').innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (e && e.message) : null);
       }
     }
 
@@ -439,7 +443,7 @@ PDFTools.registrar({
         
       } catch(e) {
         console.error(e);
-        PDFTools.UI.mostrarToast('Erro: ' + e.message, 'erro');
+        PDFTools.UI.toastErro(e);
       } finally {
         progresso.esconder();
         btn.disabled = false;

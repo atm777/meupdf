@@ -9,48 +9,37 @@ processamento acontece no próprio navegador, no seu aparelho. Site:
 > **Ops / deploy / release / regra “perguntar antes de fechar”:** ver o
 > [`LEIA-ME.md` na pasta raiz `Pdf/`](../LEIA-ME.md). Este arquivo foca em ferramentas e changelog.
 
-> Nota (auditoria, achado C1): o rodapé antigo prometia funcionamento offline ("desligue a
-> internet"), mas o Service Worker não registra de forma confiável e o app **não** funciona offline.
-> A frase foi trocada por uma afirmação verdadeira de privacidade. A promessa de offline volta
-> quando o SW real no Pages for implementado.
+> **Offline (Fase 5):** Service Worker real em `./sw.js` (mesmo origin do Pages). Após a
+> **primeira visita online**, shell + libs + tools da tag entram em cache e o app abre offline.
+> O processamento do PDF continua 100% no aparelho. Em cada release: bump `VERSAO` em
+> `index.html` **e** em `sw.js` (precache).
 
 ## Estrutura do projeto
 
 ```
 Pdf/
-├── pdftools-theme.xml   ← Tema do Blogger (legado / fallback). Ainda vale em meupdf.app
-│                           enquanto o DNS não migrar. Cola no editor de tema se precisar.
-├── pages-deploy/        ← Pasta ESTÁTICA gerada para Cloudflare Pages (só index + CSS)
-├── scripts/
-│   └── build-pages-deploy.ps1  ← Gera pages-deploy/ a partir de meupdf/ (variante A)
-└── meupdf/              ← Repositório GitHub (atm777/meupdf) + dev local
-    ├── index.html       ← Shell local (paths ./ para JS e libs). Fonte do deploy Pages.
-    ├── style.css         ← CSS do shell. Entra no Pages; no Blogger vive em <b:skin>.
-    ├── LEIA-ME.md        ← Este arquivo.
-    ├── pdf-lib.min.js, pdf.min.js, pdf.worker.min.js  ← bibliotecas de terceiros
-    └── *.js              ← uma ferramenta (ou grupo de ferramentas) por arquivo
+├── LEIA-ME.md / PLANO-FASES.md   ← ops e fases (pasta raiz)
+├── pdftools-theme.xml           ← LEGADO Blogger (não é produção)
+└── meupdf/                      ← repo GitHub atm777/meupdf → Cloudflare Pages
+    ├── index.html, style.css, sw.js, page-editor.js  ← shell no origin
+    ├── PADROES.md, LEIA-ME.md
+    ├── *.js (tools) + pdf-*.min.js                   ← tag → jsDelivr
 ```
 
 ### Produção: Cloudflare Pages (variante A) + JS no GitHub/jsDelivr
 
-> Fluxo completo de release, pergunta antes de fechar, e o que **não** fazer (Blogger etc.):
-> **[`Pdf/LEIA-ME.md`](../LEIA-ME.md)**.
+> Ops/release: **[`Pdf/LEIA-ME.md`](../LEIA-ME.md)**. Fases: **[`Pdf/PLANO-FASES.md`](../PLANO-FASES.md)**.
 
-- **Host:** Cloudflare Pages (`meupdf.app`, `www`, `meupdf.pages.dev`) — Git em `atm777/meupdf`,
-  branch `main`, build vazio, saída `/`. **Sem Worker/banco. Blogger não é produção.**
-- **Shell no Git:** `index.html` + `style.css` — o index **sempre** com URLs jsDelivr `@vX.Y.Z`.
-- **JS e libs:** mesmo repo, servidos pelo jsDelivr na tag; push + tag atualizam o CDN.
-- **Deploy canônico:** commit/push no GitHub (Pages puxa sozinho). Wrangler/`pages-deploy/` só emergência.
-- **`pdftools-theme.xml`:** legado Blogger — não usar para publicar.
+- **Host:** Cloudflare Pages (`meupdf.app` / pages.dev) — Git `atm777/meupdf`, `main`, sem Worker.
+- **Shell:** `index.html`, `style.css`, `sw.js`, `page-editor.js` no origin do Pages.
+- **Tools/libs:** jsDelivr `@VERSAO` (bump index + sw.js + tag no release).
+- **`pdftools-theme.xml`:** legado — não publicar.
 
-**Núcleo (`window.PDFTools`, dentro de `index.html` e do `<script>` final do XML):** helpers
-compartilhados por todas as ferramentas — carga de libs, leitura de arquivo, conversão de
-coordenadas com rotação (`posicaoRotacionada`/`dimensoesVisuais`), e o **sistema de ícones**:
-`PDFTools.ICONES_SVG` (SVG inline 24×24, `stroke=currentColor`) + `PDFTools.iconeSVG(id)` são a
-**fonte única de ícones do projeto** — barra do topo, cartões da home, bloco "E agora?" e os
-controles internos (seletor de modo/Girar do Editar, com o prefixo `ui-`). `PDFTools.UI` reúne os
-componentes de interface reaproveitados, incluindo `criarControleZoom`, `criarNavegadorPaginas` e
-`tornarModalAcessivel` (foco preso + Esc + retorno de foco nos modais de editor de página).
+**Núcleo (`window.PDFTools` no `index.html`):** helpers compartilhados — carga de libs, leitura de
+arquivo, rotação (`posicaoRotacionada`/`dimensoesVisuais`), `VERSAO`/`assetUrl`, erros
+(`classificarErro`/`toastErro`), ícones (`ICONES_SVG`/`iconeSVG`) e `PDFTools.UI` (dropzone, zoom,
+nav de páginas, modal a11y, próximos passos). Editores de página usam também `PDFTools.Editor`
+(`page-editor.js`).
 
 ## Ferramentas (verbo na barra do topo → arquivo → id interno)
 
@@ -60,6 +49,7 @@ deixava a ação ambígua — ex: "Exportar" sozinho não diz pra quê.
 | Verbo (linha 2)         | Arquivo               | id                    |
 |-------------------------|------------------------|-----------------------|
 | Editar                  | estudio.js             | estudio_principal     |
+| Organizar               | organizar.js           | organizar_paginas     |
 | Juntar                  | juntar.js               | juntar_pdfs           |
 | Converter               | imagens-para-pdf.js     | imagens_para_pdf      |
 | Reduzir / Tamanho       | comprimir.js            | comprimir_pdf         |
@@ -154,8 +144,25 @@ Resumo obrigatório:
   com auto-deploy (build vazio, saída `/`). JS via jsDelivr `@vX.Y.Z`. Doc operacional na raiz:
   [`Pdf/LEIA-ME.md`](../LEIA-ME.md) — inclui regra de **perguntar se há mais alterações** antes
   de fechar release (tag + index/css com jsDelivr + push). `pdftools-theme.xml` = legado.
-  `gh` autenticado como `atm777`. Pendente até o 1º push do shell: garantir `index.html` +
-  `style.css` no `main` remoto.
+  `gh` autenticado como `atm777`. Shell no `main` desde `44938d4`.
+- **Fase 1 (padrões / rails):** ver [`Pdf/PLANO-FASES.md`](../PLANO-FASES.md) e
+  [`PADROES.md`](./PADROES.md). Núcleo com `VERSAO`/`assetUrl`; kit CSS `.ft-*`; piloto
+  `juntar.js` sem hex de tema claro. *(Local até release.)*
+- **Fase 2 (PageEditor):** `page-editor.js` (`PDFTools.Editor`) no origin do Pages; Editar,
+  Assinar e Tarjar usam escala/modal/thumbs/drag/resize compartilhados. *(Local até release.)*
+- **Fase 3 (Organizar páginas):** id `organizar_paginas` em `organizar.js` — reordenar (drag),
+  remover, girar; rota `#/organizar`; barra e home. *(Local até release.)*
+- **Fase 4 (Robustez):** `classificarErro`/`toastErro`; `ehPDF` nas aberturas; compressão com
+  UI honesta e fallbacks **sem** alterar o pipeline DCT/maxPx (eficiência preservada).
+  *(Local até release.)*
+- **Fase 5 (PWA offline real):** `sw.js` no Pages (não blob); precache shell + jsDelivr `@VERSAO`;
+  rodapé com offline honesto (“depois da primeira visita”). *(Local até release.)*
+- **Fase 6 polish (sem manual):** SEO/OG/Twitter/manifest; hero alinhado ao offline; tokens CSS
+  nas tools que ainda tinham hex de tema claro. Manual do usuário **adiado**.
+- **v1.0.21 — Release das fases 1–6a (Cloudflare Pages + padrões + PageEditor + Organizar +
+  robustez + PWA offline + polish).** Tag `v1.0.21` no GitHub; `VERSAO` em `index.html` e `sw.js`;
+  todas as URLs jsDelivr `@v1.0.21`. Inclui: `page-editor.js`, `sw.js`, `PADROES.md`,
+  `organizar_paginas`, kit `.ft-*`, `toastErro`/`classificarErro`, SEO. Manual ainda fora.
 
 > **Correção (auditoria, achado B1):** as entradas antigas abaixo dizem que as tags `v1.0.14`,
 > `v1.0.16` e `v1.0.17` "ainda não existem no GitHub". Isso está **desatualizado** — a auditoria

@@ -20,8 +20,8 @@ PDFTools.registrar({
         .comp-btn { padding: 6px 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; font-size: 13px; }
         .comp-btn:hover { background: var(--sup-2); }
         .comp-btn-acao { padding: 12px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        .comp-btn-acao:hover { background: #004494; }
-        .comp-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
+        .comp-btn-acao:hover { background: var(--cor-primaria-hover, var(--acento-hover)); }
+        .comp-btn-acao:disabled { background: var(--sup-2); color: var(--texto-2); opacity: 0.45; cursor: not-allowed; }
         .comp-input { padding: 8px; border: 1px solid var(--borda); border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box; }
         .res-tabela { width: 100%; font-size: 15px; }
         .res-tabela td { padding: 8px 0; border-bottom: 1px solid var(--borda); }
@@ -67,7 +67,7 @@ PDFTools.registrar({
                <button class="comp-btn" onclick="document.getElementById('input-alvo').value='2.0'">2 MB</button>
                <button class="comp-btn" onclick="document.getElementById('input-alvo').value='5.0'">5 MB</button>
             </div>
-            <small style="color: var(--texto-2); display:block; line-height:1.4;">A ferramenta fará uma busca inteligente (até 6 tentativas) para encontrar a melhor qualidade visual que não ultrapasse esse tamanho.</small>
+            <small style="color: var(--texto-2); display:block; line-height:1.4;">Busca inteligente (até 6 tentativas) pela melhor qualidade visual que caiba no limite. Há uma folga interna de ~2,5% para o “MB” do Windows não estourar o valor que você digitou.</small>
           </div>
 
           <div id="bloco-fixa" style="display:none;">
@@ -75,6 +75,13 @@ PDFTools.registrar({
             <input type="range" id="input-qualidade" min="10" max="90" value="50" style="width:100%;">
             <div id="lbl-qualidade" style="text-align:center; font-weight:bold; margin-top:8px;">50%</div>
           </div>
+
+          <p style="font-size:12px; color:var(--texto-2); line-height:1.45; margin:16px 0 0;">
+            <strong style="color:var(--texto);">O que esta ferramenta reduz de verdade:</strong>
+            imagens JPEG embutidas no PDF (filtro DCTDecode). PDF só de texto, fontes ou imagens
+            em outros formatos (PNG/Flate, JBIG2, etc.) costumam encolher pouco ou nada — a análise
+            ao carregar o arquivo avisa quando for o caso.
+          </p>
 
           <button id="btn-comprimir" class="comp-btn-acao" style="width:100%; margin-top:24px;">Comprimir PDF</button>
           <div id="comp-progresso-container" style="margin-top:16px;"></div>
@@ -189,11 +196,8 @@ PDFTools.registrar({
         painelOpcoes.style.pointerEvents = 'auto';
 
       } catch (err) {
-        if (err.name === 'PasswordException' || (err.message && err.message.includes('encrypted'))) {
-          avisoBox.innerHTML = PDFTools.erro('pdf_protegido');
-        } else {
-          avisoBox.innerHTML = PDFTools.erro('pdf_corrompido', err.message);
-        }
+        const cod = PDFTools.classificarErro(err);
+        avisoBox.innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (err && err.message) : null);
         avisoBox.style.display = 'block';
       } finally {
         progresso.esconder();
@@ -291,8 +295,7 @@ PDFTools.registrar({
         }
 
       } catch (err) {
-        console.error(err);
-        PDFTools.UI.mostrarToast('Erro ao processar: ' + err.message, 'erro');
+        PDFTools.UI.toastErro(err);
       } finally {
         progresso.esconder();
         btn.disabled = false;
@@ -471,10 +474,12 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
         // Se ficou entre 90% e 100%, paramos (já está excelente)
         if (atualTamanho >= alvoBytes * 0.90) break;
       } else {
-        // Ficou grande demais, precisa reduzir qualidade
+        // Ficou grande demais: desce a qualidade (qMax = q). O algoritmo de recompressão
+        // (DCT + maxPx por faixa de q) NÃO muda — só o registro do fallback.
         qMax = q;
-        // Se for a última tentativa e não salvamos nada ainda, salva esse como melhor esforço
-        if (t === numTentativas - 1 && !melhorBlob) {
+        // Guarda o menor overshoot visto (em geral a última tentativa, mais agressiva).
+        // Antes só gravava na última iteração; se ela falhasse por exceção, saíamos sem blob.
+        if (atualTamanho < melhorTamanho) {
            melhorBlob = new Blob([finalBytes], { type: 'application/pdf' });
            melhorTamanho = atualTamanho;
         }
@@ -487,11 +492,19 @@ async function comprimirLogica(bufferOriginal, params, aoProgredir) {
     }
   }
 
-  // Se mesmo reduzindo tudo nunca bateu a meta, entrega o melhor (que será a última iteração onde qMin era quase qMax)
+  // Blindagem: se nenhuma tentativa produziu blob (falha total), devolve o original intocado.
+  if (!melhorBlob) {
+    melhorBlob = new Blob([bufferOriginal], { type: 'application/pdf' });
+    melhorTamanho = tamanhoOrig;
+  }
+
+  // Se mesmo reduzindo tudo nunca bateu a meta, entrega o melhor esforço (menor overshoot).
   return { blob: melhorBlob, tentativas, tamanho: melhorTamanho, imagensIgnoradas: imgIgnoradasStats, totalImagensOriginal: imgTotal };
 }
 
 async function recomprimirJpeg(imgBytes, qualidade) {
+  // IMPORTANTE (eficiência): faixas maxPx e qualidade JPEG intactas — não “suavizar” estes
+  // limites; já foram validados com PDFs pesados de imagem. Só liberamos o canvas no fim.
   return new Promise((resolve, reject) => {
     const blob = new Blob([imgBytes], { type: 'image/jpeg' });
     const url = URL.createObjectURL(blob);
@@ -519,9 +532,14 @@ async function recomprimirJpeg(imgBytes, qualidade) {
       ctx.drawImage(img, 0, 0, w, h);
       
       canvas.toBlob(async (newBlob) => {
-        if (!newBlob) return reject(new Error('toBlob falhou'));
-        const buf = await newBlob.arrayBuffer();
-        resolve({ bytes: new Uint8Array(buf), w, h });
+        try {
+          if (!newBlob) return reject(new Error('toBlob falhou'));
+          const buf = await newBlob.arrayBuffer();
+          resolve({ bytes: new Uint8Array(buf), w, h });
+        } finally {
+          // Memória: zera o canvas sem mudar o resultado do JPEG.
+          if (PDFTools.liberarCanvas) PDFTools.liberarCanvas(canvas);
+        }
       }, 'image/jpeg', qualidade);
     };
     img.onerror = () => {

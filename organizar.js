@@ -28,13 +28,14 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
         .org-btn { padding: 6px 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; font-size: 13px; }
         .org-btn:hover { background: var(--sup-2); }
         .org-btn-acao { padding: 10px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; text-align: center; }
-        .org-btn-acao:hover { background: #004494; }
-        .org-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
-        .org-input { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 4px; font-size: 14px; }
+        .org-btn-acao:hover:not(:disabled) { background: var(--cor-primaria-hover, var(--acento-hover)); }
+        .org-btn-acao:disabled { opacity: 0.45; cursor: not-allowed; background: var(--sup-2); color: var(--texto-2); }
+        .org-input { padding: 6px 8px; border: 1px solid var(--borda); border-radius: 4px; font-size: 14px; background: var(--sup); color: var(--texto); }
         .org-grupo-opcoes { margin-bottom: 16px; }
-        .org-grupo-opcoes label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; }
+        .org-grupo-opcoes label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--texto); }
         .org-badge-remover { position: absolute; top: -8px; right: -8px; background: var(--cor-erro); color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; border: none; cursor: pointer; display: none; }
         .org-pagina:hover .org-badge-remover { display: block; }
+        .org-pagina .org-orig { font-weight: normal; color: var(--texto-2); }
       `;
       document.head.appendChild(style);
     }
@@ -131,7 +132,7 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
         <label style="display:block; font-size:13px;">
           <input type="radio" name="org_saida" id="org_saida_sep" value="separados"> Baixar separados
         </label>
-        <div id="org-aviso-separados" style="font-size:11px; color: #d32f2f; margin-top:6px; display:none;">
+        <div id="org-aviso-separados" style="font-size:11px; color: var(--cor-erro); margin-top:6px; display:none;">
           O navegador vai pedir permissão e pode bloquear os últimos arquivos.
         </div>
       </div>
@@ -221,11 +222,8 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
         renderizarGrade();
 
       } catch(err) {
-        if (err.name === 'PasswordException') {
-          telaInicial.innerHTML = PDFTools.erro('pdf_protegido');
-        } else {
-          telaInicial.innerHTML = PDFTools.erro('pdf_corrompido', err.message);
-        }
+        const cod = PDFTools.classificarErro(err);
+        telaInicial.innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (err && err.message) : null);
       }
     }
 
@@ -341,12 +339,12 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
 
         el.innerHTML = `
           <div class="org-pagina-header">
-            <span>#${index + 1} <span style="font-weight:normal;color:#adb5bd;">(orig ${p.originalIndex + 1})</span></span>
+            <span>#${index + 1} <span class="org-orig">(orig ${p.originalIndex + 1})</span></span>
           </div>
           <div class="org-pagina-thumb-container">
             <div class="thumb-placeholder">${p.originalIndex + 1}</div>
           </div>
-          <button class="org-badge-remover" title="Remover página">✕</button>
+          ${foco.mostrarRemover ? '<button type="button" class="org-badge-remover" title="Remover página">✕</button>' : ''}
         `;
 
         if (foco.mostrarSelecao) {
@@ -364,12 +362,18 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
           };
         }
 
-        el.querySelector('.org-badge-remover').onclick = (e) => {
-          e.stopPropagation();
-          salvarEstado();
-          plano.splice(index, 1);
-          renderizarGrade();
-        };
+        const btnRem = el.querySelector('.org-badge-remover');
+        if (btnRem) {
+          btnRem.onclick = (e) => {
+            e.stopPropagation();
+            if (plano.length <= 1) {
+              return PDFTools.UI.mostrarToast('O PDF precisa de pelo menos uma página.', 'info');
+            }
+            salvarEstado();
+            plano.splice(index, 1);
+            renderizarGrade();
+          };
+        }
 
         // DRAG AND DROP (sempre disponível, independente do foco)
         el.addEventListener('dragstart', e => { e.dataTransfer.effectAllowed='move'; draggedIdx = index; setTimeout(()=>el.style.opacity=0.5,0); });
@@ -618,8 +622,7 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
           }
         }
       } catch (e) {
-        console.error(e);
-        PDFTools.UI.mostrarToast('Erro ao processar: ' + e.message, 'erro');
+        PDFTools.UI.toastErro(e);
       } finally {
         progresso.esconder();
         btnGerar.disabled = false;
@@ -639,12 +642,31 @@ function montarOrganizarUI(container, foco, arquivoInicial) {
 
 const FOCOS_ORGANIZAR = [
   {
+    id: 'organizar_paginas',
+    nome: 'Organizar Páginas',
+    descricao: 'Reordene, remova e gire páginas do PDF — tudo no navegador, sem upload.',
+    mostrarSelecao: true,
+    mostrarGirar: true,
+    mostrarRemover: true,
+    mostrarEscolhaDivisao: false,
+    mostrarProximosPassos: true,
+    acaoFixa: 'juntar', // um único PDF com o plano (ordem + giros + remoções)
+    labelBotao: 'Salvar PDF Organizado',
+    sufixoArquivo: '-organizado',
+    paramLabel: null,
+    paramValor: null,
+    explicacao: 'Arraste as miniaturas para reordenar. Clique para selecionar (Shift para intervalo). Use Girar ou Remover na barra lateral — ou o ✕ em cada página. Depois salve o PDF.',
+    acaoSessaoTexto: 'Organizou as páginas'
+  },
+  {
     id: 'dividir_pdf', nome: 'Dividir PDF',
     descricao: 'Divida o PDF em vários arquivos menores — por quantidade de páginas ou por tamanho máximo em MB.',
     mostrarSelecao: false, mostrarGirar: false, mostrarRemover: false,
     mostrarEscolhaDivisao: true,
+    mostrarProximosPassos: true,
     acaoFixa: null, labelBotao: 'Dividir e Baixar', sufixoArquivo: '-parte',
-    paramLabel: null, paramValor: null
+    paramLabel: null, paramValor: null,
+    acaoSessaoTexto: 'Dividiu o PDF'
   }
 ];
 

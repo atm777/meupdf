@@ -18,12 +18,12 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
         .cr-aba.ativa { border-bottom-color: var(--cor-primaria); color: var(--cor-primaria); }
         .cr-campo { margin-bottom: 12px; }
         .cr-campo label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--texto-2); }
-        .cr-input { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+        .cr-input { width: 100%; padding: 8px; border: 1px solid var(--borda); border-radius: 4px; font-size: 14px; box-sizing: border-box; }
         .cr-preview-container { background: var(--sup-2); display: flex; align-items: center; justify-content: center; min-height: 400px; border-radius: 8px; overflow: hidden; padding: 16px; }
         .cr-preview-container canvas { max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background: var(--sup); }
         .cr-btn-acao { padding: 12px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; }
-        .cr-btn-acao:hover { background: #004494; }
-        .cr-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
+        .cr-btn-acao:hover { background: var(--cor-primaria-hover, var(--acento-hover)); }
+        .cr-btn-acao:disabled { background: var(--sup-2); color: var(--texto-2); opacity: 0.45; cursor: not-allowed; }
         .cr-btn-preview { background: var(--sup); border: 1px solid var(--cor-primaria); color: var(--cor-primaria); font-weight: bold; padding: 8px; border-radius: 4px; cursor: pointer; width: 100%; margin-bottom: 16px; }
         .cr-btn-preview:hover { background: #e6f0fa; }
         .cr-aviso-marca { font-size: 12px; color: #ffc107; background: rgba(255, 193, 7, 0.2); padding: 8px; border-radius: 4px; margin-top: 16px; }
@@ -223,6 +223,10 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
     }
 
     async function abrirArquivo(file) {
+      if (!(await PDFTools.ehPDF(file))) {
+        container.querySelector('#cr-tela-inicial').innerHTML = PDFTools.erro('nao_e_pdf');
+        return;
+      }
       fileOrig = file;
       container.querySelector('#cr-tela-inicial').innerHTML = '<div style="text-align:center; padding:40px;">Lendo arquivo...</div>';
       try {
@@ -236,11 +240,8 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
         
         gerarPreview();
       } catch (e) {
-        console.error(e);
-        const protegido = e.name === 'PasswordException' || (e.message && /encrypt|senha|password/i.test(e.message));
-        container.querySelector('#cr-tela-inicial').innerHTML = protegido
-          ? PDFTools.erro('pdf_protegido')
-          : PDFTools.erro('pdf_corrompido', e.message);
+        const cod = PDFTools.classificarErro(e);
+        container.querySelector('#cr-tela-inicial').innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (e && e.message) : null);
       }
     }
 
@@ -343,7 +344,7 @@ function montarCarimboUI(container, modoFixo, arquivoInicial) {
         PDFTools.registrarAcaoSessao(modoAtual === 'num' ? 'Numerou as páginas' : "Adicionou marca d'água");
       } catch(e) {
          console.error(e);
-         PDFTools.UI.mostrarToast('Erro: ' + e.message, 'erro');
+         PDFTools.UI.toastErro(e);
       } finally {
          btn.disabled = false;
          progresso.esconder();

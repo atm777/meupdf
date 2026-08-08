@@ -5,46 +5,11 @@ PDFTools.registrar({
   precisa: ['pdf-lib'],
   montarUI: function(container, arquivoInicial) {
     let itens = [];
-    
-    if (!document.getElementById('css-juntar-pdf')) {
-      const style = document.createElement('style');
-      style.id = 'css-juntar-pdf';
-      style.textContent = `
-        .ferramenta-grid { display: flex; gap: 24px; flex-wrap: wrap; }
-        .ferramenta-col-esq { flex: 1; min-width: 300px; }
-        .ferramenta-col-dir { width: 300px; flex-shrink: 0; background: var(--sup-2); padding: 16px; border-radius: 8px; border: 1px solid var(--borda); }
-        .pdf-grade { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; max-height: 400px; overflow-y: auto; padding: 4px; }
-        .pdf-item { border: 1px solid var(--borda); border-radius: 4px; padding: 12px; background: var(--sup); cursor: grab; display: flex; align-items: center; gap: 12px; }
-        .pdf-item:active { cursor: grabbing; }
-        .pdf-item.dragging { opacity: 0.5; }
-        .pdf-item.drag-over { border-color: var(--cor-primaria); box-shadow: 0 0 0 2px var(--cor-primaria); }
-        .pdf-item-icone { font-size: 24px; }
-        .pdf-item-info { flex-grow: 1; overflow: hidden; }
-        .pdf-item-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .pdf-item-meta { font-size: 12px; color: var(--texto-2); }
-        .pdf-acoes { display: flex; gap: 4px; }
-        .pdf-acoes button { background: var(--sup-2); border: 1px solid #ced4da; border-radius: 4px; cursor: pointer; padding: 6px 12px; font-size: 14px; }
-        .pdf-acoes button:hover { background: #dde0e3; }
-        .pdf-acoes button.del { color: var(--cor-erro); font-weight: bold; }
-        .ordenacao-acoes { display: flex; gap: 8px; margin-top: 16px; }
-        .ordenacao-acoes button { font-size: 12px; padding: 6px 12px; cursor: pointer; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; }
-        .ordenacao-acoes button:hover { background: #f0f0f0; }
-        .resumo-box { background: var(--sup-2); padding: 12px; border-radius: 4px; margin-top: 16px; font-size: 14px; text-align: center; font-weight: bold; }
-        .aviso-box { background: rgba(255, 193, 7, 0.2); color: #ffc107; padding: 12px; border-radius: 4px; margin-top: 16px; font-size: 13px; display: none; border: 1px solid rgba(255, 193, 7, 0.4); }
-        .opcoes-grupo { margin-bottom: 16px; }
-        .opcoes-grupo label { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; cursor: pointer; }
-        .opcoes-grupo input[type="checkbox"] { margin-top: 4px; }
-        .opcoes-grupo .dica { display: block; font-size: 12px; color: var(--texto-2); font-weight: normal; margin-top: 4px; }
-        .opcoes-grupo input[type="text"] { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--borda); font-size: 14px; box-sizing: border-box; margin-top: 4px; }
-        .area-resultado { margin-top: 24px; padding: 16px; border: 1px solid var(--cor-sucesso); border-radius: 8px; background: #eaffea; display: none; }
-        .area-resultado p { margin: 0 0 12px 0; font-weight: bold; color: var(--cor-sucesso); }
-      `;
-      document.head.appendChild(style);
-    }
 
-    const grid = PDFTools.UI.criarElemento('div', ['ferramenta-grid']);
-    const colEsq = PDFTools.UI.criarElemento('div', ['ferramenta-col-esq']);
-    const colDir = PDFTools.UI.criarElemento('div', ['ferramenta-col-dir']);
+    // Chrome de UI via kit global .ft-* (style.css) — sem CSS injetado com hex de tema claro.
+    const grid = PDFTools.UI.criarElemento('div', ['ft-layout']);
+    const colEsq = PDFTools.UI.criarElemento('div', ['ft-col-main']);
+    const colDir = PDFTools.UI.criarElemento('div', ['ft-col-side']);
     grid.appendChild(colEsq);
     grid.appendChild(colDir);
 
@@ -99,25 +64,27 @@ PDFTools.registrar({
     });
     colEsq.appendChild(areaDrop);
 
-    const ordenacao = PDFTools.UI.criarElemento('div', ['ordenacao-acoes']);
+    const ordenacao = PDFTools.UI.criarElemento('div', ['ft-toolbar-mini']);
     ordenacao.style.display = 'none';
-    const btnOrdNome = PDFTools.UI.criarElemento('button', [], 'Ordenar por Nome');
+    const btnOrdNome = PDFTools.UI.criarElemento('button', ['ft-btn'], 'Ordenar por Nome');
+    btnOrdNome.type = 'button';
     btnOrdNome.onclick = () => { itens.sort((a, b) => a.file.name.localeCompare(b.file.name)); renderLista(); };
     ordenacao.appendChild(btnOrdNome);
     colEsq.appendChild(ordenacao);
 
-    const grade = PDFTools.UI.criarElemento('div', ['pdf-grade']);
+    const grade = PDFTools.UI.criarElemento('div', ['ft-lista']);
     colEsq.appendChild(grade);
 
-    const resumo = PDFTools.UI.criarElemento('div', ['resumo-box']);
+    const resumo = PDFTools.UI.criarElemento('div', ['ft-resumo']);
     resumo.style.display = 'none';
     colEsq.appendChild(resumo);
-    
-    const avisoBox = PDFTools.UI.criarElemento('div', ['aviso-box']);
+
+    const avisoBox = PDFTools.UI.criarElemento('div', ['ft-aviso']);
+    avisoBox.style.display = 'none';
     colEsq.appendChild(avisoBox);
 
     colDir.innerHTML = `
-      <div class="opcoes-grupo">
+      <div class="ft-opcoes-grupo">
         <label>
           <input type="checkbox" id="opt-branco">
           <div>
@@ -126,7 +93,7 @@ PDFTools.registrar({
           </div>
         </label>
       </div>
-      <div class="opcoes-grupo">
+      <div class="ft-opcoes-grupo">
         <label>
           <input type="checkbox" id="opt-metadados" checked>
           <div>
@@ -135,11 +102,11 @@ PDFTools.registrar({
           </div>
         </label>
       </div>
-      <div class="opcoes-grupo">
+      <div class="ft-opcoes-grupo">
         <label>
           <strong>Nome do Arquivo</strong>
         </label>
-        <input type="text" id="opt-nome" value="juntado-${new Date().toISOString().split('T')[0]}">
+        <input type="text" id="opt-nome" class="ft-input" value="juntado-${new Date().toISOString().split('T')[0]}">
       </div>
     `;
 
@@ -210,18 +177,7 @@ PDFTools.registrar({
         PDFTools.registrarAcaoSessao('Juntou os PDFs');
 
       } catch (err) {
-        console.error(err);
-        
-        // Tratamento de erros específicos
-        let codErro = 'desconhecido';
-        if (err.message.includes('protegido por senha')) codErro = 'pdf_protegido';
-        else if (err.message.includes('corrompido')) codErro = 'pdf_corrompido';
-
-        // Toast é texto simples: usa a mensagem amigável do catálogo (sem os detalhes técnicos,
-        // que já foram para o console.error acima).
-        const el = document.createElement('div');
-        el.innerHTML = PDFTools.erro(codErro);
-        PDFTools.UI.mostrarToast(el.textContent, 'erro');
+        PDFTools.UI.toastErro(err);
       } finally {
         progresso.esconder();
         btnGerar.disabled = false;
@@ -229,12 +185,12 @@ PDFTools.registrar({
     });
     colDir.appendChild(btnGerar);
 
-    const areaResultado = PDFTools.UI.criarElemento('div', ['area-resultado']);
+    const areaResultado = PDFTools.UI.criarElemento('div', ['ft-resultado']);
     areaResultado.innerHTML = `
       <p>PDF Pronto!</p>
       <div style="font-size:14px; margin-bottom:4px;">Tamanho final: <strong class="res-tamanho"></strong></div>
       <div style="font-size:14px; margin-bottom:12px;">Total de páginas: <strong class="res-paginas"></strong></div>
-      <button class="pdf-btn-principal" style="min-height:40px; margin-top:0;">Baixar Novamente</button>
+      <button type="button" class="ft-btn-acao" style="min-height:40px; margin-top:0;">Baixar Novamente</button>
       <div class="prox-passos-slot"></div>
     `;
     colDir.appendChild(areaResultado);
@@ -266,26 +222,25 @@ PDFTools.registrar({
         if (item.numPages === null || item.numPages === '?') paginasProntas = false;
         else totalPags += item.numPages;
 
-        const el = PDFTools.UI.criarElemento('div', ['pdf-item']);
+        const el = PDFTools.UI.criarElemento('div', ['ft-lista-item']);
         el.draggable = true;
-        
+
         const txtPaginas = item.carregando ? 'Calculando...' : (item.numPages === '?' ? 'Erro' : `${item.numPages} pág(s)`);
-        
+
         el.innerHTML = `
-          <div class="pdf-item-icone">📄</div>
-          <div class="pdf-item-info">
-            <div class="pdf-item-title"></div>
-            <div class="pdf-item-meta">${PDFTools.formatarTamanho(item.file.size)} • ${txtPaginas}</div>
+          <div style="font-size:24px;line-height:1" aria-hidden="true">📄</div>
+          <div class="ft-lista-item-info">
+            <div class="ft-lista-item-title"></div>
+            <div class="ft-lista-item-meta">${PDFTools.formatarTamanho(item.file.size)} • ${txtPaginas}</div>
           </div>
-          <div class="pdf-acoes">
-            <button class="btn-up" aria-label="Mover para cima">↑</button>
-            <button class="btn-down" aria-label="Mover para baixo">↓</button>
-            <button class="del" aria-label="Remover">✕</button>
+          <div class="ft-lista-acoes">
+            <button type="button" class="ft-btn btn-up" aria-label="Mover para cima">↑</button>
+            <button type="button" class="ft-btn btn-down" aria-label="Mover para baixo">↓</button>
+            <button type="button" class="ft-btn del" aria-label="Remover">✕</button>
           </div>
         `;
-        // Nome exibido via textContent: preserva acentos ("Relatório Anual.pdf") e é seguro
-        // contra HTML no nome do arquivo. sanitizarNome continua valendo só para o nome do download.
-        const tituloEl = el.querySelector('.pdf-item-title');
+        // Nome exibido via textContent: preserva acentos e é seguro contra HTML no nome.
+        const tituloEl = el.querySelector('.ft-lista-item-title');
         tituloEl.textContent = item.file.name;
         tituloEl.title = item.file.name;
 
@@ -303,7 +258,7 @@ PDFTools.registrar({
         });
         el.addEventListener('dragend', () => {
           el.classList.remove('dragging');
-          grade.querySelectorAll('.pdf-item').forEach(e => e.classList.remove('drag-over'));
+          grade.querySelectorAll('.ft-lista-item').forEach(n => n.classList.remove('drag-over'));
         });
         el.addEventListener('dragover', (e) => {
           e.preventDefault();

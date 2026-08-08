@@ -38,7 +38,7 @@ PDFTools.registrar({
         .ip-btn-limpar { padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; background: var(--cor-erro); color: white; }
         .ip-btn-limpar:hover { background: #c82333; }
         .ip-btn-salvar { padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; background: var(--cor-primaria); color: white; }
-        .ip-btn-salvar:hover { background: #004494; }
+        .ip-btn-salvar:hover { background: var(--cor-primaria-hover, var(--acento-hover)); }
       `;
       document.head.appendChild(style);
     }

@@ -16,8 +16,9 @@
   --r: 16px;
   --fonte: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   
-  /* Variáveis mapeadas para as ferramentas internas (ui.js) */
+  /* Variáveis mapeadas para as ferramentas internas */
   --cor-primaria: var(--acento);
+  --cor-primaria-hover: var(--acento-hover);
   --cor-fundo: transparent;
   --cor-texto: var(--texto);
   --cor-borda: var(--borda);
@@ -26,6 +27,10 @@
   /* Fundo levemente esverdeado para painéis de "sucesso"/honestidade (usado no Assinar).
      Translúcido de propósito: funciona sobre o tema claro e o escuro sem redefinir. */
   --cor-sucesso-fundo: rgba(16, 185, 129, 0.15);
+  /* Avisos (amarelo) — tools usam em vez de hex soltos */
+  --aviso: #fbbf24;
+  --aviso-fundo: rgba(251, 191, 36, 0.15);
+  --aviso-borda: rgba(251, 191, 36, 0.4);
   --fonte-padrao: var(--fonte);
   --raio-borda: 12px;
 }
@@ -86,10 +91,8 @@ body {
 .toolbar-logo-link { flex-shrink: 0; display: flex; line-height: 0; }
 .toolbar-logo { width: 42px; height: 42px; border-radius: 8px; }
 
-/* Só faz diferença no Blogger (não existe no index.html local): o Blogger embrulha o
-   <b:section id="header"> e o <b:widget> de dentro em divs próprias (.section, .widget,
-   .widget-content), o que quebra o flex de .topo-toolbar (logo/nav deixam de ser itens
-   diretos). "display: contents" neutraliza esses wrappers sem afetar o layout local. */
+/* Legado Blogger (se o XML antigo ainda for aberto em algum lugar): wrappers .section/.widget
+   quebram o flex da toolbar. Inofensivo no Pages. */
 #header, #header .widget, #header .widget-content { display: contents; }
 
 .toolbar-ferramentas {
@@ -458,6 +461,96 @@ body.pdf-editor-modal-aberto #workspace { backdrop-filter: none; -webkit-backdro
 .toolbar-ferramentas.rola-esq.rola-dir {
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-barra), #000 calc(100% - var(--fade-barra)), transparent 100%);
           mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-barra), #000 calc(100% - var(--fade-barra)), transparent 100%);
+}
+
+/* =========================================================================
+   Kit de ferramentas (.ft-*) — chrome compartilhado (Fase 1 / PADROES.md)
+   Preferir estas classes a CSS injetado com hex de tema claro.
+   ========================================================================= */
+.ft-layout { display: flex; gap: 24px; flex-wrap: wrap; }
+.ft-col-main { flex: 1; min-width: 300px; }
+.ft-col-side {
+  width: 300px; flex-shrink: 0;
+  background: var(--sup-2); padding: 16px; border-radius: 8px;
+  border: 1px solid var(--borda);
+}
+.ft-painel {
+  background: var(--sup-2); border: 1px solid var(--borda);
+  border-radius: 8px; padding: 16px 20px; margin-bottom: 16px;
+}
+.ft-painel h3 {
+  margin: 0 0 16px; font-size: 16px;
+  border-bottom: 1px solid var(--borda); padding-bottom: 8px;
+}
+.ft-btn {
+  padding: 6px 12px; background: var(--sup); border: 1px solid var(--borda);
+  border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--texto);
+  font-family: var(--fonte);
+}
+.ft-btn:hover { background: var(--sup-2); border-color: var(--cor-primaria); }
+.ft-btn-acao {
+  padding: 12px; width: 100%;
+  background: var(--cor-primaria); color: #fff; border: none; border-radius: 4px;
+  cursor: pointer; font-size: 16px; font-weight: bold; font-family: var(--fonte);
+}
+.ft-btn-acao:hover:not(:disabled) { background: var(--cor-primaria-hover); }
+.ft-btn-acao:disabled {
+  opacity: 0.45; cursor: not-allowed;
+  background: var(--sup-2); color: var(--texto-2);
+}
+.ft-input {
+  width: 100%; padding: 8px; border: 1px solid var(--borda); border-radius: 4px;
+  font-size: 14px; box-sizing: border-box;
+  background: var(--sup); color: var(--texto); font-family: var(--fonte);
+}
+.ft-aviso {
+  background: var(--aviso-fundo); color: var(--aviso);
+  border: 1px solid var(--aviso-borda); border-radius: 4px;
+  padding: 12px; font-size: 13px; margin-top: 16px;
+}
+.ft-resultado {
+  margin-top: 24px; padding: 16px;
+  border: 1px solid var(--cor-sucesso); border-radius: 8px;
+  background: var(--cor-sucesso-fundo); display: none;
+}
+.ft-resultado > p:first-child {
+  margin: 0 0 12px; font-weight: bold; color: var(--cor-sucesso);
+}
+.ft-lista {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 16px;
+  max-height: 400px; overflow-y: auto; padding: 4px;
+}
+.ft-lista-item {
+  border: 1px solid var(--borda); border-radius: 4px; padding: 12px;
+  background: var(--sup); cursor: grab;
+  display: flex; align-items: center; gap: 12px;
+}
+.ft-lista-item:active { cursor: grabbing; }
+.ft-lista-item.dragging { opacity: 0.5; }
+.ft-lista-item.drag-over {
+  border-color: var(--cor-primaria);
+  box-shadow: 0 0 0 2px var(--cor-primaria);
+}
+.ft-lista-item-info { flex-grow: 1; overflow: hidden; min-width: 0; }
+.ft-lista-item-title {
+  font-weight: bold; font-size: 14px; margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ft-lista-item-meta { font-size: 12px; color: var(--texto-2); }
+.ft-lista-acoes { display: flex; gap: 4px; flex-shrink: 0; }
+.ft-lista-acoes .ft-btn.del { color: var(--cor-erro); font-weight: bold; }
+.ft-toolbar-mini { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.ft-resumo {
+  background: var(--sup-2); padding: 12px; border-radius: 4px; margin-top: 16px;
+  font-size: 14px; text-align: center; font-weight: bold;
+}
+.ft-opcoes-grupo { margin-bottom: 16px; }
+.ft-opcoes-grupo label {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 14px; cursor: pointer;
+}
+.ft-opcoes-grupo input[type="checkbox"] { margin-top: 4px; }
+.ft-opcoes-grupo .dica {
+  display: block; font-size: 12px; color: var(--texto-2); font-weight: normal; margin-top: 4px;
 }
 
 /* =========================================================================

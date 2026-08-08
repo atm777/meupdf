@@ -27,7 +27,7 @@ PDFTools.registrar({
         
         .tx-btn-acao { padding: 12px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; margin-bottom: 12px; }
         .tx-btn-acao:hover { background: var(--acento-hover); }
-        .tx-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
+        .tx-btn-acao:disabled { background: var(--sup-2); color: var(--texto-2); opacity: 0.45; cursor: not-allowed; }
         .tx-btn { padding: 8px 12px; background: var(--sup); color: var(--texto); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; width: 100%; margin-bottom: 8px; }
         .tx-btn:hover { background: var(--sup-2); }
       `;
@@ -95,6 +95,10 @@ PDFTools.registrar({
     container.querySelector('#tx-progresso').appendChild(progresso.elemento);
 
     async function abrirArquivo(file) {
+      if (!(await PDFTools.ehPDF(file))) {
+        container.querySelector('#tx-tela-inicial').innerHTML = PDFTools.erro('nao_e_pdf');
+        return;
+      }
       fileOrig = file;
       container.querySelector('#tx-tela-inicial').innerHTML = '<div style="text-align:center; padding:40px;">Carregando e analisando PDF...</div>';
       try {
@@ -109,8 +113,8 @@ PDFTools.registrar({
         // Auto-run na abertura
         container.querySelector('#btn-extrair').click();
       } catch (e) {
-        if (e.name === 'PasswordException') container.querySelector('#tx-tela-inicial').innerHTML = PDFTools.erro('pdf_protegido');
-        else container.querySelector('#tx-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido', e.message);
+        const cod = PDFTools.classificarErro(e);
+        container.querySelector('#tx-tela-inicial').innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (e && e.message) : null);
       }
     }
 
@@ -280,7 +284,7 @@ PDFTools.registrar({
         
       } catch(e) {
         console.error(e);
-        PDFTools.UI.mostrarToast('Erro ao extrair: ' + e.message, 'erro');
+        PDFTools.UI.toastErro(e);
       } finally {
         progresso.esconder();
         btn.disabled = false;

@@ -33,12 +33,12 @@ PDFTools.registrar({
         .as-thumb-container canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
         .as-badge { position: absolute; bottom: 4px; right: 4px; background: var(--cor-sucesso); color: white; border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: bold; display: none; }
         .as-btn-acao { padding: 12px; background: var(--cor-primaria); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; }
-        .as-btn-acao:hover { background: #004494; }
-        .as-btn-acao:disabled { background: #ccc; cursor: not-allowed; }
+        .as-btn-acao:hover { background: var(--cor-primaria-hover, var(--acento-hover)); }
+        .as-btn-acao:disabled { background: var(--sup-2); color: var(--texto-2); opacity: 0.45; cursor: not-allowed; }
         .as-btn { padding: 6px 12px; background: var(--sup); border: 1px solid var(--borda); border-radius: 4px; cursor: pointer; font-size: 13px; }
         .as-btn:hover { background: var(--sup-2); }
         
-        .as-aviso { background: #eaffea; color: #28a745; padding: 12px; border-radius: 4px; font-size: 13px; border: 1px solid #b3e6b3; margin-bottom: 16px; }
+        .as-aviso { background: var(--cor-sucesso-fundo); color: var(--cor-sucesso); padding: 12px; border-radius: 4px; font-size: 13px; border: 1px solid var(--cor-sucesso); margin-bottom: 16px; }
         
         /* Modal Assinatura Base */
         .as-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; flex-direction: column; }
@@ -110,7 +110,7 @@ PDFTools.registrar({
               <button class="as-btn" id="btn-criar-ass" style="width:100%; border-color:var(--cor-primaria); color:var(--cor-primaria); font-weight:bold;">Criar Nova Assinatura</button>
             </div>
             <div id="box-com-assinatura" style="display:none; text-align:center;">
-              <div style="background:var(--sup-2); border:1px dashed #ccc; border-radius:4px; padding:16px; margin-bottom:8px; height:80px; display:flex; align-items:center; justify-content:center;">
+              <div style="background:var(--sup-2); border:1px dashed var(--borda); border-radius:4px; padding:16px; margin-bottom:8px; height:80px; display:flex; align-items:center; justify-content:center;">
                 <img id="img-assinatura-salva" style="max-width:100%; max-height:100%;">
               </div>
               <button class="as-btn" id="btn-apagar-ass" style="width:100%; color:var(--cor-erro); border-color:var(--cor-erro);">Apagar Assinatura do Aparelho</button>
@@ -530,11 +530,16 @@ PDFTools.registrar({
     };
 
     // --- LEITURA DO ARQUIVO ---
-    let visaoObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => { if (entry.isIntersecting) renderizarMiniatura(entry.target); });
-    }, { rootMargin: '200px' });
+    const Ed = PDFTools.Editor;
+    const visaoObserver = Ed.criarObserverMiniaturas((el) => {
+      Ed.renderizarMiniaturaPdf(pdfDocJs, el, { containerSeletor: '.as-thumb-container' });
+    });
 
     async function abrirArquivo(file) {
+      if (!(await PDFTools.ehPDF(file))) {
+        container.querySelector('#as-tela-inicial').innerHTML = PDFTools.erro('nao_e_pdf');
+        return;
+      }
       fileOrig = file;
       container.querySelector('#as-tela-inicial').innerHTML = '<div style="text-align:center; padding:40px;">Lendo arquivo...</div>';
       try {
@@ -550,8 +555,8 @@ PDFTools.registrar({
         container.querySelector('#as-tela-trabalho').style.display = 'flex';
         renderizarGrade();
       } catch(e) {
-        if (e.name === 'PasswordException') container.querySelector('#as-tela-inicial').innerHTML = PDFTools.erro('pdf_protegido');
-        else container.querySelector('#as-tela-inicial').innerHTML = PDFTools.erro('pdf_corrompido', e.message);
+        const cod = PDFTools.classificarErro(e);
+        container.querySelector('#as-tela-inicial').innerHTML = PDFTools.erro(cod, cod === 'desconhecido' ? (e && e.message) : null);
       }
     }
 
@@ -581,20 +586,6 @@ PDFTools.registrar({
       }
     }
 
-    async function renderizarMiniatura(el) {
-      if (el.dataset.rendered) return;
-      el.dataset.rendered = "true";
-      const index = parseInt(el.dataset.index);
-      try {
-        const page = await pdfDocJs.getPage(index + 1);
-        const viewport = page.getViewport({ scale: 0.3 }); 
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        el.querySelector('.as-thumb-container').appendChild(canvas);
-      } catch(e) {}
-    }
-
     // --- EDITOR ---
     const modalEditor = container.querySelector('#as-modal-editor');
     const layer = container.querySelector('#as-layer');
@@ -617,81 +608,50 @@ PDFTools.registrar({
       botaoFechar: () => container.querySelector('#btn-cancelar-desenho')
     });
 
-    // Zoom do editor: `escalaBase` é o "ajustar à tela" calculado ao abrir cada página;
-    // o fator do controle de zoom multiplica em cima disso. Lupa/botões no desktop, pinça de
-    // dois dedos no celular (ver criarControleZoom em ui.js).
+    // Zoom + nav + escala via PDFTools.Editor (Fase 2).
     let paginaPdfAtual = null;
     let escalaBase = 1;
     const modalBody = container.querySelector('#as-modal-body');
-    const controleZoom = window.PDFTools.UI.criarControleZoom({
-      superficieToque: modalBody,
-      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); }
-    });
-    container.querySelector('#as-zoom-slot').appendChild(controleZoom.elemento);
-
-    // Setas ▲/▼ do lado da página pra trocar de página sem sair do editor.
-    const navegadorPaginas = window.PDFTools.UI.criarNavegadorPaginas({
+    const { controleZoom, navegadorPaginas } = Ed.montarZoomENav({
+      modalBody,
+      zoomSlot: container.querySelector('#as-zoom-slot'),
+      navSlot: container.querySelector('#as-nav-paginas-slot'),
+      aoMudarZoom: (fator) => { if (paginaPdfAtual) renderizarPaginaNoCanvas(fator); },
       aoNavegar: (novoIndice) => abrirEditor(novoIndice)
     });
-    container.querySelector('#as-nav-paginas-slot').appendChild(navegadorPaginas.elemento);
-
-    // Usa o espaço realmente disponível dentro de #as-modal-body (já descontada a barra do topo
-    // e a faixa do navegador de páginas) em vez de um chute em cima de window.innerHeight —
-    // senão a página "ajustada à tela" fica maior do que cabe de verdade.
-    function calcularEscalaAjuste(viewportRef, fatorMaximo) {
-      // Padding real do .as-modal-body (muda por media query em telas baixas) em vez de fixo.
-      const cs = getComputedStyle(modalBody);
-      const padH = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-      const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-      const larguraNav = navegadorPaginas.elemento.offsetWidth ? navegadorPaginas.elemento.offsetWidth + 16 : 0;
-      const maxWidth = Math.max(100, modalBody.clientWidth - padH - larguraNav);
-      const maxHeight = Math.max(100, modalBody.clientHeight - padV);
-      return Math.min(maxWidth / viewportRef.width, maxHeight / viewportRef.height, fatorMaximo);
-    }
 
     async function renderizarPaginaNoCanvas(fatorZoom) {
-      const viewport = paginaPdfAtual.getViewport({ scale: escalaBase * fatorZoom });
-      cvsEditor.width = viewport.width; cvsEditor.height = viewport.height;
-
-      const ctx = cvsEditor.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,cvsEditor.width, cvsEditor.height);
-      await paginaPdfAtual.render({ canvasContext: ctx, viewport }).promise;
-
+      await Ed.renderCanvasPagina(paginaPdfAtual, cvsEditor, escalaBase * fatorZoom);
       renderizarItensEditor();
     }
 
     async function abrirEditor(index) {
       paginaAtualModal = index;
       container.querySelector('#as-modal-pagina').textContent = index + 1;
-      modalEditor.style.display = 'flex';
-      // Neutraliza o backdrop-filter do #workspace enquanto o modal está aberto (ver regra CSS
-      // body.pdf-editor-modal-aberto #workspace): sem isso o filtro prende o position:fixed do
-      // modal dentro do workspace em vez da viewport, e a página fica menor do que caberia.
-      document.body.classList.add('pdf-editor-modal-aberto');
+      Ed.abrirModalEditor(modalEditor);
       layer.innerHTML = '';
       navegadorPaginas.atualizar(index, numPages);
 
       const page = await pdfDocJs.getPage(index + 1);
       paginaPdfAtual = page;
       const viewportRef = page.getViewport({ scale: 1.0 });
-      escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
+      escalaBase = Ed.calcularEscalaAjuste(modalBody, viewportRef, {
+        fatorMaximo: 1.5,
+        navEl: navegadorPaginas.elemento
+      });
 
       controleZoom.definirZoom(1); // dispara renderizarPaginaNoCanvas(1) via aoMudarZoom
     }
 
-    // Recalcula o "ajustar à tela" ao mudar o tamanho da janela / girar o celular.
-    let _resizeRafAs = null;
-    function aoRedimensionarAssinar() {
-      if (modalEditor.style.display === 'none' || !paginaPdfAtual) return;
-      if (_resizeRafAs) cancelAnimationFrame(_resizeRafAs);
-      _resizeRafAs = requestAnimationFrame(() => {
-        const viewportRef = paginaPdfAtual.getViewport({ scale: 1.0 });
-        escalaBase = calcularEscalaAjuste(viewportRef, 1.5);
-        renderizarPaginaNoCanvas(controleZoom.obterZoom());
-      });
-    }
-    window.addEventListener('resize', aoRedimensionarAssinar);
-    window.addEventListener('orientationchange', aoRedimensionarAssinar);
+    const resizeEditor = Ed.criarResizeEditor({
+      modalEl: modalEditor,
+      modalBody,
+      navEl: navegadorPaginas.elemento,
+      getPaginaPdf: () => paginaPdfAtual,
+      fatorMaximo: 1.5,
+      setEscalaBase: (n) => { escalaBase = n; },
+      render: () => renderizarPaginaNoCanvas(controleZoom.obterZoom())
+    });
 
     function renderizarItensEditor() {
       layer.innerHTML = '';
@@ -829,14 +789,8 @@ PDFTools.registrar({
       draggingInfo = null;
     }
 
-    // mousemove/mouseup vão no document, não no layer: assim que o arrasto sai de cima do item
-    // pequeno (pointer-events:auto só nos itens, não no layer vazio em volta), um listener preso
-    // ao layer para de receber os eventos no meio do gesto. draggingInfo!=null já garante que só
-    // faz algo quando um arrasto está de fato em andamento.
-    document.addEventListener('mousemove', doMove);
-    document.addEventListener('mouseup', doEnd);
-    document.addEventListener('touchmove', doMove, {passive:false});
-    document.addEventListener('touchend', doEnd);
+    // mousemove/mouseup no document via Editor (arrasto não “morre” ao sair do item).
+    const arrastoDoc = Ed.ouvirArrastoDocumento({ onMove: doMove, onEnd: doEnd });
     layer.addEventListener('click', doEnd);
 
     function salvarEstado() {
@@ -849,8 +803,7 @@ PDFTools.registrar({
     };
     
     container.querySelector('#btn-as-fechar').onclick = () => {
-      modalEditor.style.display = 'none';
-      document.body.classList.remove('pdf-editor-modal-aberto');
+      Ed.fecharModalEditor(modalEditor);
       atualizarBadges();
     };
 
@@ -883,8 +836,7 @@ PDFTools.registrar({
         PDFTools.registrarAcaoSessao('Assinou o documento');
 
       } catch (err) {
-        console.error(err);
-        PDFTools.UI.mostrarToast('Erro: ' + err.message, 'erro');
+        PDFTools.UI.toastErro(err);
       } finally {
         progresso.esconder();
         btn.disabled = false;
@@ -897,13 +849,9 @@ PDFTools.registrar({
     // listeners que ficam no `document` (mesmas referências, sem bind novo) e desliga o
     // observer de miniaturas, pra não acumularem a cada nova abertura da ferramenta.
     return function limparAssinar() {
-      document.removeEventListener('mousemove', doMove);
-      document.removeEventListener('mouseup', doEnd);
-      document.removeEventListener('touchmove', doMove);
-      document.removeEventListener('touchend', doEnd);
-      window.removeEventListener('resize', aoRedimensionarAssinar);
-      window.removeEventListener('orientationchange', aoRedimensionarAssinar);
-      document.body.classList.remove('pdf-editor-modal-aberto');
+      try { arrastoDoc.destruir(); } catch (e) {}
+      try { resizeEditor.destruir(); } catch (e) {}
+      Ed.fecharModalEditor(modalEditor);
       try { a11yEditor.destruir(); a11yCriar.destruir(); a11yDesenho.destruir(); } catch (e) {}
       try { visaoObserver.disconnect(); } catch (e) {}
     };
